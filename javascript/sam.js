@@ -197,3 +197,66 @@ onUiUpdate(() => {
         }
     }
 })
+
+
+function monitorImageResolution(tab_id) {
+    return async (...values) => {
+        const src = values[0];
+        let resolution = [512, 512];
+        if (src) {
+            resolution = await getImageResolutionFromSrc(src);
+        }
+
+        const observer = monitorThisParam(
+            tab_id,
+            "extensions.segment_anything",
+            ["width", "height"],
+            (extractor = (_) => resolution),
+        );
+        return await observer(...values);
+    };
+}
+
+function getImageResolutionFromSrc(src) {
+    return new Promise((resolve, _) => {
+        const img = new Image();
+        img.src = src;
+        img.onload = () => {
+            resolve([img.naturalWidth, img.naturalHeight]);
+        };
+    });
+}
+
+async function monitorButton(tab_name, button_id) {
+    systemMonitorState[tab_name] = {
+        generate_button_id: button_id,
+        timeout_id: null,
+        functions: {
+            "extensions.segment_anything": {
+                params: {
+                    width: 512,
+                    height: 512,
+                    n_iter: 1,
+                },
+                link_params: {}, // tab_name: function_name
+                mutipliers: {}, // multipler_name: value
+                link_mutipliers: {}, // function_name: param_name
+            },
+        },
+    };
+    await updateButton(tab_name);
+}
+
+onUiLoaded(async function () {
+    await monitorButton("txt2img_sam_run_interface", "txt2img_sam_run_button");
+    await monitorButton("img2img_sam_run_interface", "img2img_sam_run_button");
+
+    await monitorButton("txt2img_sam_dino_run_interface", "txt2img_sam_dino_run_button");
+    await monitorButton("img2img_sam_dino_run_interface", "img2img_sam_dino_run_button");
+
+    await monitorButton("txt2img_sam_cnet_seg_run_interface", "txt2img_sam_cnet_seg_run_button");
+    await monitorButton("img2img_sam_cnet_seg_run_interface", "img2img_sam_cnet_seg_run_button");
+
+    await monitorButton("txt2img_sam_crop_run_interface", "txt2img_sam_crop_run_button");
+    await monitorButton("img2img_sam_crop_run_interface", "img2img_sam_crop_run_button");
+});

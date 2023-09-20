@@ -188,12 +188,13 @@ def create_mask_batch_output(
 def sam_predict_wrapper(request: gr.Request, id_task, sam_model_name, input_image, *args, **kwargs):
     with monitor_call_context(
         request,
-        "adetailer.detection",
-        "segment_anything",
+        "extensions.segment_anything",
+        "extensions.segment_anything",
         id_task.removeprefix("task(").removesuffix(")"),
         decoded_params={
             "width": input_image.width,
             "height": input_image.height,
+            "n_iter": 1,
         },
         is_intermediate=False,
     ):
@@ -216,11 +217,12 @@ def sam_predict(request: gr.Request, sam_model_name, input_image, positive_point
     if dino_enabled:
         with monitor_call_context(
             request,
-            "adetailer.detection",
-            "segment_anything",
+            "extensions.segment_anything",
+            "extensions.segment_anything",
             decoded_params={
                 "width": input_image.width,
                 "height": input_image.height,
+                "n_iter": 1,
             },
         ):
             boxes_filt, install_success = dino_predict_internal(input_image, dino_model_name, text_prompt, box_threshold)
@@ -236,11 +238,12 @@ def sam_predict(request: gr.Request, sam_model_name, input_image, positive_point
 
     with monitor_call_context(
         request,
-        "adetailer.detection",
-        "segment_anything",
+        "extensions.segment_anything",
+        "extensions.segment_anything",
         decoded_params={
             "width": input_image.width,
             "height": input_image.height,
+            "n_iter": 1,
         },
     ):
         if dino_enabled and boxes_filt.shape[0] > 1:
@@ -280,12 +283,13 @@ def sam_predict(request: gr.Request, sam_model_name, input_image, positive_point
 def dino_predict_wrapper(request: gr.Request, id_task: str, input_image, *args, **kwargs):
     with monitor_call_context(
         request,
-        "adetailer.detection",
-        "segment_anything",
+        "extensions.segment_anything",
+        "extensions.segment_anything",
         id_task.removeprefix("task(").removesuffix(")"),
         decoded_params={
             "width": input_image.width,
             "height": input_image.height,
+            "n_iter": 1,
         },
         is_intermediate=False,
     ):
@@ -301,11 +305,12 @@ def dino_predict(request: gr.Request, input_image, dino_model_name, text_prompt,
 
     with monitor_call_context(
         request,
-        "adetailer.detection",
-        "segment_anything",
+        "extensions.segment_anything",
+        "extensions.segment_anything",
         decoded_params={
             "width": input_image.width,
             "height": input_image.height,
+            "n_iter": 1,
         },
     ):
         boxes_filt, install_success = dino_predict_internal(input_image, dino_model_name, text_prompt, box_threshold)
@@ -379,22 +384,24 @@ def cnet_seg_wrapper(
 ):
     with monitor_call_context(
         request,
-        "adetailer.detection",
-        "segment_anything",
+        "extensions.segment_anything",
+        "extensions.segment_anything",
         id_task.removeprefix("task(").removesuffix(")"),
         decoded_params={
             "width": cnet_seg_input_image.width,
             "height": cnet_seg_input_image.height,
+            "n_iter": 1,
         },
         is_intermediate=False,
     ):
         with monitor_call_context(
             request,
-            "adetailer.detection",
-            "segment_anything",
+            "extensions.segment_anything",
+            "extensions.segment_anything",
             decoded_params={
                 "width": cnet_seg_input_image.width,
                 "height": cnet_seg_input_image.height,
+                "n_iter": 1,
             },
         ):
             return cnet_seg(sam_model_name, cnet_seg_input_image, *args, **kwargs)
@@ -458,22 +465,24 @@ def categorical_mask_wrapper(
 ):
     with monitor_call_context(
         request,
-        "adetailer.detection",
-        "segment_anything",
+        "extensions.segment_anything",
+        "extensions.segment_anything",
         id_task.removeprefix("task(").removesuffix(")"),
         decoded_params={
             "width": crop_input_image.width,
             "height": crop_input_image.height,
+            "n_iter": 1,
         },
         is_intermediate=False,
     ):
         with monitor_call_context(
             request,
-            "adetailer.detection",
-            "segment_anything",
+            "extensions.segment_anything",
+            "extensions.segment_anything",
             decoded_params={
                 "width": crop_input_image.width,
                 "height": crop_input_image.height,
+                "n_iter": 1,
             },
         ):
             return categorical_mask(
@@ -681,7 +690,6 @@ def ui_processor(use_random=True, use_cnet=True):
         show_progress=False)
     return cnet_seg_processor, cnet_seg_processor_res, cnet_seg_gallery_input, cnet_seg_pixel_perfect, cnet_seg_resize_mode
 
-
 class Script(scripts.Script):
 
     def title(self):
@@ -713,6 +721,18 @@ class Script(scripts.Script):
                 with gr.TabItem(label="Single Image"):
                     gr.HTML(value="<p>Left click the image to add one positive point (black dot). Right click the image to add one negative point (red dot). Left click the point to remove it.</p>")
                     sam_input_image = gr.Image(label="Image for Segment Anything", elem_id=f"{tab_prefix}input_image", source="upload", type="pil", image_mode="RGBA")
+                    sam_input_image.change(
+                        None,
+                        inputs=[],
+                        outputs=[sam_input_image],
+                        _js=f"monitorImageResolution('{tab_prefix}run_interface')",
+                    )
+                    sam_input_image.change(
+                        None,
+                        inputs=[],
+                        outputs=[sam_input_image],
+                        _js=f"monitorImageResolution('{tab_prefix}dino_run_interface')",
+                    )
                     sam_remove_dots = gr.Button(value="Remove all point prompts")
                     sam_dummy_component = gr.Label(visible=False)
                     sam_remove_dots.click(
@@ -722,6 +742,12 @@ class Script(scripts.Script):
                         outputs=None)
                     gr.HTML(value="<p>GroundingDINO + Segment Anything can achieve [text prompt]->[object detection]->[segmentation]</p>")
                     dino_checkbox = gr.Checkbox(value=False, label="Enable GroundingDINO", elem_id=f"{tab_prefix}dino_enable_checkbox")
+                    dino_checkbox.change(
+                        None,
+                        inputs=[],
+                        outputs=[dino_checkbox],
+                        _js=f"monitorThisParam('{tab_prefix}run_interface', 'extensions.segment_anything', 'n_iter', extractor = (x) => x? 2 : 1)",
+                    )
                     with gr.Column(visible=False) as dino_column:
                         gr.HTML(value="<p>Due to the limitation of Segment Anything, when there are point prompts, at most 1 box prompt will be allowed; when there are multiple box prompts, no point prompts are allowed.</p>")
                         dino_model_name = gr.Dropdown(label="GroundingDINO Model (Auto download from huggingface)", choices=dino_model_list, value=dino_model_list[0])
@@ -815,8 +841,15 @@ class Script(scripts.Script):
                                 "You can also utilize [Edit-Anything](https://github.com/sail-sg/EditAnything) and generate images according to random segmentation which preserve image layout.")
                             cnet_seg_processor, cnet_seg_processor_res, cnet_seg_gallery_input, cnet_seg_pixel_perfect, cnet_seg_resize_mode = ui_processor(use_cnet=(max_cn_num() > 0))
                             cnet_seg_input_image = gr.Image(label="Image for Auto Segmentation", source="upload", type="pil", image_mode="RGBA")
+                            cnet_seg_input_image.change(
+                                None,
+                                inputs=[],
+                                outputs=[cnet_seg_input_image],
+                                _js=f"monitorImageResolution('{tab_prefix}cnet_seg_run_interface')",
+                            )
+
                             cnet_seg_output_gallery = gr.Gallery(label="Auto segmentation output", columns=2)
-                            cnet_seg_submit = gr.Button(value="Preview segmentation image")
+                            cnet_seg_submit = gr.Button(value="Preview segmentation image", elem_id=f"{tab_prefix}cnet_seg_run_button")
                             cnet_seg_status = gr.Text(value="", label="Segmentation status")
                             cnet_seg_submit.click(
                                 fn=cnet_seg_wrapper,
@@ -864,10 +897,16 @@ class Script(scripts.Script):
                             with gr.Tabs():
                                 with gr.TabItem(label="Single Image"):
                                     crop_input_image = gr.Image(label="Image to be masked", source="upload", type="pil", image_mode="RGBA")
+                                    crop_input_image.change(
+                                        None,
+                                        inputs=[],
+                                        outputs=[crop_input_image],
+                                        _js=f"monitorImageResolution('{tab_prefix}crop_run_interface')",
+                                    )
                                     crop_output_gallery = gr.Gallery(label="Output", columns=3)
                                     crop_padding = gr.Number(value=-2, visible=False, interactive=False, precision=0)
                                     crop_resized_image = gr.Image(label="Resized image", source="upload", type="pil", image_mode="RGBA", visible=False)
-                                    crop_submit = gr.Button(value="Preview mask")
+                                    crop_submit = gr.Button(value="Preview mask", elem_id=f"{tab_prefix}crop_run_button")
                                     crop_result = gr.Text(value="", label="Categorical mask status")
                                     crop_submit.click(
                                         fn=categorical_mask_wrapper,
