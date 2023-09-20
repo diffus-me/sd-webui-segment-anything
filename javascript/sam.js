@@ -95,6 +95,12 @@ function samRemoveDots() {
     return arguments;
 }
 
+function submit_task() {
+    const res = Array.from(arguments);
+    res[0] = randomId();
+    return res;
+}
+
 function create_submit_sam_args(args) {
     res = []
     for (var i = 0; i < args.length; i++) {
@@ -113,6 +119,7 @@ function submit_dino() {
         res.push(arguments[i])
     }
 
+    res[0] = randomId();
     res[res.length - 2] = null
     res[res.length - 1] = null
     return res
@@ -137,8 +144,10 @@ function submit_sam() {
             }
         });
     });
-    res[2] = positive_points;
-    res[3] = negative_points;
+
+    res[0] = randomId();
+    res[3] = positive_points;
+    res[4] = negative_points;
     return res
 }
 
