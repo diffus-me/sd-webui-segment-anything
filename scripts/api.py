@@ -1,13 +1,14 @@
 import os
-from fastapi import FastAPI, Body
+from fastapi import FastAPI, Body, Request
 from pydantic import BaseModel
 from typing import Any, Optional, List
+from uuid import uuid4
 import gradio as gr
 from PIL import Image
 import numpy as np
 
 from modules.api.api import encode_pil_to_base64, decode_base64_to_image
-from scripts.sam import sam_predict, dino_predict, update_mask, cnet_seg, categorical_mask
+from scripts.sam import categorical_mask_wrapper, dino_predict_wrapper, sam_predict_wrapper, update_mask, cnet_seg_wrapper
 from scripts.sam import sam_model_list
 
 
@@ -60,10 +61,12 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         dino_preview_boxes_selection: Optional[List[int]] = None
 
     @app.post("/sam/sam-predict")
-    async def api_sam_predict(payload: SamPredictRequest = Body(...)) -> Any:
+    async def api_sam_predict(request: Request, payload: SamPredictRequest = Body(...)) -> Any:
         print(f"SAM API /sam/sam-predict received request")
         payload.input_image = decode_to_pil(payload.input_image).convert('RGBA')
-        sam_output_mask_gallery, sam_message = sam_predict(
+        sam_output_mask_gallery, sam_message = sam_predict_wrapper(
+            request,
+            f"task({uuid4()})",
             payload.sam_model_name,
             payload.input_image,
             payload.sam_positive_points,
@@ -91,10 +94,12 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         box_threshold: float = 0.3
 
     @app.post("/sam/dino-predict")
-    async def api_dino_predict(payload: DINOPredictRequest = Body(...)) -> Any:
+    async def api_dino_predict(request: Request, payload: DINOPredictRequest = Body(...)) -> Any:
         print(f"SAM API /sam/dino-predict received request")
         payload.input_image = decode_to_pil(payload.input_image)
-        dino_output_img, _, dino_msg = dino_predict(
+        dino_output_img, _, dino_msg = dino_predict_wrapper(
+            request,
+            f"task({uuid4()})",
             payload.input_image,
             payload.dino_model_name,
             payload.text_prompt,
@@ -148,11 +153,13 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         target_H: Optional[int] = None
 
     @app.post("/sam/controlnet-seg")
-    async def api_controlnet_seg(payload: ControlNetSegRequest = Body(...),
+    async def api_controlnet_seg(request: Request, payload: ControlNetSegRequest = Body(...),
                                  autosam_conf: AutoSAMConfig = Body(...)) -> Any:
         print(f"SAM API /sam/controlnet-seg received request")
         payload.input_image = decode_to_pil(payload.input_image)
-        cnet_seg_img, cnet_seg_msg = cnet_seg(
+        cnet_seg_img, cnet_seg_msg = cnet_seg_wrapper(
+            request,
+            f"task({uuid4()})",
             payload.sam_model_name,
             payload.input_image,
             payload.processor,
@@ -200,11 +207,14 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         input_image: str
     
     @app.post("/sam/category-mask")
-    async def api_category_mask(payload: CategoryMaskRequest = Body(...),
+    async def api_category_mask(request: Request,
+                                payload: CategoryMaskRequest = Body(...),
                                 autosam_conf: AutoSAMConfig = Body(...)) -> Any:
         print(f"SAM API /sam/category-mask received request")
         payload.input_image = decode_to_pil(payload.input_image)
-        category_mask_img, category_mask_msg, resized_input_img = categorical_mask(
+        category_mask_img, category_mask_msg, resized_input_img = categorical_mask_wrapper(
+            request,
+            f"task({uuid4()})",
             payload.sam_model_name,
             payload.processor,
             payload.processor_res,

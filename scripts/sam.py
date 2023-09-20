@@ -15,6 +15,7 @@ from modules.safe import unsafe_torch_load, load
 from modules.processing import StableDiffusionProcessingImg2Img, StableDiffusionProcessing
 from modules.devices import device, torch_gc, cpu
 from modules.paths import models_path
+from modules.system_monitor import monitor_call_context
 from sam_hq.predictor import SamPredictorHQ
 from sam_hq.build_sam_hq import sam_model_registry
 from scripts.dino import dino_model_list, dino_predict_internal, show_boxes, clear_dino_cache, dino_install_issue_text
@@ -183,7 +184,23 @@ def create_mask_batch_output(
             output_blend.save(os.path.join(dino_batch_dest_dir, f"{filename}_{idx}_blend{ext}"))
 
 
-def sam_predict(sam_model_name, input_image, positive_points, negative_points,
+
+def sam_predict_wrapper(request: gr.Request, id_task, sam_model_name, input_image, *args, **kwargs):
+    with monitor_call_context(
+        request,
+        "adetailer.detection",
+        "segment_anything",
+        id_task.removeprefix("task(").removesuffix(")"),
+        decoded_params={
+            "width": input_image.width,
+            "height": input_image.height,
+        },
+        is_intermediate=False,
+    ):
+        return sam_predict(request, sam_model_name, input_image, *args, **kwargs)
+
+
+def sam_predict(request: gr.Request, sam_model_name, input_image, positive_points, negative_points,
                 dino_checkbox, dino_model_name, text_prompt, box_threshold,
                 dino_preview_checkbox, dino_preview_boxes_selection):
     print("Start SAM Processing")
@@ -197,7 +214,17 @@ def sam_predict(sam_model_name, input_image, positive_points, negative_points,
     boxes_filt = None
     sam_predict_result = " done."
     if dino_enabled:
-        boxes_filt, install_success = dino_predict_internal(input_image, dino_model_name, text_prompt, box_threshold)
+        with monitor_call_context(
+            request,
+            "adetailer.detection",
+            "segment_anything",
+            decoded_params={
+                "width": input_image.width,
+                "height": input_image.height,
+            },
+        ):
+            boxes_filt, install_success = dino_predict_internal(input_image, dino_model_name, text_prompt, box_threshold)
+
         if dino_preview_checkbox is not None and dino_preview_checkbox and dino_preview_boxes_selection is not None:
             valid_indices = [int(i) for i in dino_preview_boxes_selection if int(i) < boxes_filt.shape[0]]
             boxes_filt = boxes_filt[valid_indices]
@@ -205,46 +232,84 @@ def sam_predict(sam_model_name, input_image, positive_points, negative_points,
     print(f"Running SAM Inference {image_np_rgb.shape}")
     predictor = SamPredictorHQ(sam, 'hq' in sam_model_name)
     predictor.set_image(image_np_rgb)
-    if dino_enabled and boxes_filt.shape[0] > 1:
-        sam_predict_status = f"SAM inference with {boxes_filt.shape[0]} boxes, point prompts discarded"
-        print(sam_predict_status)
-        transformed_boxes = predictor.transform.apply_boxes_torch(boxes_filt, image_np.shape[:2])
-        masks, _, _ = predictor.predict_torch(
-            point_coords=None,
-            point_labels=None,
-            boxes=transformed_boxes.to(sam_device),
-            multimask_output=True)
-        masks = masks.permute(1, 0, 2, 3).cpu().numpy()
-    else:
-        num_box = 0 if boxes_filt is None else boxes_filt.shape[0]
-        num_points = len(positive_points) + len(negative_points)
-        if num_box == 0 and num_points == 0:
-            garbage_collect(sam)
-            if dino_enabled and dino_preview_checkbox and num_box == 0:
-                return [], "It seems that you are using a high box threshold with no point prompts. Please lower your box threshold and re-try."
-            return [], "You neither added point prompts nor enabled GroundingDINO. Segmentation cannot be generated."
-        sam_predict_status = f"SAM inference with {num_box} box, {len(positive_points)} positive prompts, {len(negative_points)} negative prompts"
-        print(sam_predict_status)
-        point_coords = np.array(positive_points + negative_points)
-        point_labels = np.array([1] * len(positive_points) + [0] * len(negative_points))
-        box = copy.deepcopy(boxes_filt[0].numpy()) if boxes_filt is not None and boxes_filt.shape[0] > 0 else None
-        masks, _, _ = predictor.predict(
-            point_coords=point_coords if len(point_coords) > 0 else None,
-            point_labels=point_labels if len(point_coords) > 0 else None,
-            box=box,
-            multimask_output=True)
-        masks = masks[:, None, ...]
+
+
+    with monitor_call_context(
+        request,
+        "adetailer.detection",
+        "segment_anything",
+        decoded_params={
+            "width": input_image.width,
+            "height": input_image.height,
+        },
+    ):
+        if dino_enabled and boxes_filt.shape[0] > 1:
+            sam_predict_status = f"SAM inference with {boxes_filt.shape[0]} boxes, point prompts discarded"
+            print(sam_predict_status)
+            transformed_boxes = predictor.transform.apply_boxes_torch(boxes_filt, image_np.shape[:2])
+            masks, _, _ = predictor.predict_torch(
+                point_coords=None,
+                point_labels=None,
+                boxes=transformed_boxes.to(sam_device),
+                multimask_output=True)
+            masks = masks.permute(1, 0, 2, 3).cpu().numpy()
+        else:
+            num_box = 0 if boxes_filt is None else boxes_filt.shape[0]
+            num_points = len(positive_points) + len(negative_points)
+            if num_box == 0 and num_points == 0:
+                garbage_collect(sam)
+                if dino_enabled and dino_preview_checkbox and num_box == 0:
+                    return [], "It seems that you are using a high box threshold with no point prompts. Please lower your box threshold and re-try."
+                return [], "You neither added point prompts nor enabled GroundingDINO. Segmentation cannot be generated."
+            sam_predict_status = f"SAM inference with {num_box} box, {len(positive_points)} positive prompts, {len(negative_points)} negative prompts"
+            print(sam_predict_status)
+            point_coords = np.array(positive_points + negative_points)
+            point_labels = np.array([1] * len(positive_points) + [0] * len(negative_points))
+            box = copy.deepcopy(boxes_filt[0].numpy()) if boxes_filt is not None and boxes_filt.shape[0] > 0 else None
+            masks, _, _ = predictor.predict(
+                point_coords=point_coords if len(point_coords) > 0 else None,
+                point_labels=point_labels if len(point_coords) > 0 else None,
+                box=box,
+                multimask_output=True)
+            masks = masks[:, None, ...]
+
     garbage_collect(sam)
     return create_mask_output(image_np, masks, boxes_filt), sam_predict_status + sam_predict_result + (f" However, GroundingDINO installment has failed. Your process automatically fall back to local groundingdino. Check your terminal for more detail and {dino_install_issue_text}." if (dino_enabled and not install_success) else "")
 
 
-def dino_predict(input_image, dino_model_name, text_prompt, box_threshold):
+def dino_predict_wrapper(request: gr.Request, id_task: str, input_image, *args, **kwargs):
+    with monitor_call_context(
+        request,
+        "adetailer.detection",
+        "segment_anything",
+        id_task.removeprefix("task(").removesuffix(")"),
+        decoded_params={
+            "width": input_image.width,
+            "height": input_image.height,
+        },
+        is_intermediate=False,
+    ):
+        return dino_predict(request, input_image, *args, **kwargs)
+
+
+def dino_predict(request: gr.Request, input_image, dino_model_name, text_prompt, box_threshold):
     if input_image is None:
         return None, gr.update(), gr.update(visible=True, value=f"GroundingDINO requires input image.")
     if text_prompt is None or text_prompt == "":
         return None, gr.update(), gr.update(visible=True, value=f"GroundingDINO requires text prompt.")
     image_np = np.array(input_image)
-    boxes_filt, install_success = dino_predict_internal(input_image, dino_model_name, text_prompt, box_threshold)
+
+    with monitor_call_context(
+        request,
+        "adetailer.detection",
+        "segment_anything",
+        decoded_params={
+            "width": input_image.width,
+            "height": input_image.height,
+        },
+    ):
+        boxes_filt, install_success = dino_predict_internal(input_image, dino_model_name, text_prompt, box_threshold)
+
     boxes_filt = boxes_filt.numpy()
     boxes_choice = [str(i) for i in range(boxes_filt.shape[0])]
     return Image.fromarray(show_boxes(image_np, boxes_filt.astype(int), show_index=True)), gr.update(choices=boxes_choice, value=boxes_choice), gr.update(visible=False) if install_success else gr.update(visible=True, value=f"GroundingDINO installment failed. Your process automatically fall back to local groundingdino. See your terminal for more detail and {dino_install_issue_text}")
@@ -304,6 +369,37 @@ def dino_batch_process(
     return process_info + "Done" + ("" if install_success else f". However, GroundingDINO installment has failed. Your process automatically fall back to local groundingdino. See your terminal for more detail and {dino_install_issue_text}")
 
 
+def cnet_seg_wrapper(
+        request: gr.Request,
+        id_task,
+        sam_model_name,
+        cnet_seg_input_image,
+        *args,
+        **kwargs
+):
+    with monitor_call_context(
+        request,
+        "adetailer.detection",
+        "segment_anything",
+        id_task.removeprefix("task(").removesuffix(")"),
+        decoded_params={
+            "width": cnet_seg_input_image.width,
+            "height": cnet_seg_input_image.height,
+        },
+        is_intermediate=False,
+    ):
+        with monitor_call_context(
+            request,
+            "adetailer.detection",
+            "segment_anything",
+            decoded_params={
+                "width": cnet_seg_input_image.width,
+                "height": cnet_seg_input_image.height,
+            },
+        ):
+            return cnet_seg(sam_model_name, cnet_seg_input_image, *args, **kwargs)
+
+
 def cnet_seg(
     sam_model_name, cnet_seg_input_image, cnet_seg_processor, cnet_seg_processor_res, 
     cnet_seg_pixel_perfect, cnet_seg_resize_mode, target_W, target_H,
@@ -343,6 +439,56 @@ def image_layout(
     sem_sam_garbage_collect()
     garbage_collect(sam)
     return outputs
+
+
+def categorical_mask_wrapper(
+    request: gr.Request,
+    id_task: str,
+    sam_model_name,
+    crop_processor,
+    crop_processor_res,
+    crop_pixel_perfect,
+    crop_resize_mode,
+    target_W,
+    target_H,
+    crop_category_input,
+    crop_input_image,
+    *args,
+    **kwargs
+):
+    with monitor_call_context(
+        request,
+        "adetailer.detection",
+        "segment_anything",
+        id_task.removeprefix("task(").removesuffix(")"),
+        decoded_params={
+            "width": crop_input_image.width,
+            "height": crop_input_image.height,
+        },
+        is_intermediate=False,
+    ):
+        with monitor_call_context(
+            request,
+            "adetailer.detection",
+            "segment_anything",
+            decoded_params={
+                "width": crop_input_image.width,
+                "height": crop_input_image.height,
+            },
+        ):
+            return categorical_mask(
+                sam_model_name,
+                crop_processor,
+                crop_processor_res,
+                crop_pixel_perfect,
+                crop_resize_mode,
+                target_W,
+                target_H,
+                crop_category_input,
+                crop_input_image,
+                *args,
+                **kwargs
+            )
 
 
 def categorical_mask(
@@ -550,6 +696,7 @@ class Script(scripts.Script):
         tab_prefix = ("img2img" if is_img2img else "txt2img") + "_sam_"
         ui_process = ()
         with gr.Accordion('Segment Anything', open=False):
+            id_task = gr.Label(visible=False)
             with gr.Row():
                 with gr.Column(scale=10):
                     with gr.Row():
@@ -587,9 +734,9 @@ class Script(scripts.Script):
                             dino_preview_boxes_selection = gr.CheckboxGroup(label="Select your favorite boxes: ", elem_id=f"{tab_prefix}dino_preview_boxes_selection")
                             dino_preview_result = gr.Text(value="", label="GroundingDINO preview status", visible=False)
                             dino_preview_boxes_button.click(
-                                fn=dino_predict,
+                                fn=dino_predict_wrapper,
                                 _js="submit_dino",
-                                inputs=[sam_input_image, dino_model_name, dino_text_prompt, dino_box_threshold],
+                                inputs=[id_task, sam_input_image, dino_model_name, dino_text_prompt, dino_box_threshold],
                                 outputs=[dino_preview_boxes, dino_preview_boxes_selection, dino_preview_result])
                         dino_preview_checkbox.change(
                             fn=gr_show,
@@ -605,9 +752,9 @@ class Script(scripts.Script):
                     sam_submit = gr.Button(value="Preview Segmentation", elem_id=f"{tab_prefix}run_button")
                     sam_result = gr.Text(value="", label="Segment Anything status")
                     sam_submit.click(
-                        fn=sam_predict,
+                        fn=sam_predict_wrapper,
                         _js='submit_sam',
-                        inputs=[sam_model_name, sam_input_image,        # SAM
+                        inputs=[id_task, sam_model_name, sam_input_image,        # SAM
                                 sam_dummy_component, sam_dummy_component,   # Point prompts
                                 dino_checkbox, dino_model_name, dino_text_prompt, dino_box_threshold,  # DINO prompts
                                 dino_preview_checkbox, dino_preview_boxes_selection],  # DINO preview prompts
@@ -672,8 +819,9 @@ class Script(scripts.Script):
                             cnet_seg_submit = gr.Button(value="Preview segmentation image")
                             cnet_seg_status = gr.Text(value="", label="Segmentation status")
                             cnet_seg_submit.click(
-                                fn=cnet_seg,
-                                inputs=[sam_model_name, cnet_seg_input_image, cnet_seg_processor, cnet_seg_processor_res, cnet_seg_pixel_perfect, cnet_seg_resize_mode, img2img_width if is_img2img else txt2img_width, img2img_height if is_img2img else txt2img_height, *auto_sam_config],
+                                fn=cnet_seg_wrapper,
+                                _js="submit_task",
+                                inputs=[id_task, sam_model_name, cnet_seg_input_image, cnet_seg_processor, cnet_seg_processor_res, cnet_seg_pixel_perfect, cnet_seg_resize_mode, img2img_width if is_img2img else txt2img_width, img2img_height if is_img2img else txt2img_height, *auto_sam_config],
                                 outputs=[cnet_seg_output_gallery, cnet_seg_status])
                             with gr.Row(visible=(max_cn_num() > 0)):
                                 cnet_seg_enable_copy = gr.Checkbox(value=False, label='Copy to ControlNet Segmentation')
@@ -722,8 +870,9 @@ class Script(scripts.Script):
                                     crop_submit = gr.Button(value="Preview mask")
                                     crop_result = gr.Text(value="", label="Categorical mask status")
                                     crop_submit.click(
-                                        fn=categorical_mask,
-                                        inputs=[sam_model_name, crop_processor, crop_processor_res, crop_pixel_perfect, crop_resize_mode, 
+                                        fn=categorical_mask_wrapper,
+                                        _js="submit_task",
+                                        inputs=[id_task, sam_model_name, crop_processor, crop_processor_res, crop_pixel_perfect, crop_resize_mode, 
                                                 img2img_width if is_img2img else txt2img_width, img2img_height if is_img2img else txt2img_height, 
                                                 crop_category_input, crop_input_image, *auto_sam_config],
                                         outputs=[crop_output_gallery, crop_result, crop_resized_image])
