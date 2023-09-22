@@ -923,15 +923,15 @@ class Script(scripts.Script):
                                         crop_dilation_checkbox, crop_dilation_output_gallery)
                                     ui_process += crop_single_image_process
 
-                                with gr.TabItem(label="Batch Process"):
-                                    crop_batch_dilation_amt, crop_batch_source_dir, crop_batch_dest_dir, _, crop_batch_save_image, crop_batch_save_mask, crop_batch_save_image_with_mask, crop_batch_save_background, crop_batch_run_button, crop_batch_progress = ui_batch(False)
-                                    crop_batch_run_button.click(
-                                        fn=categorical_mask_batch,
-                                        inputs=[sam_model_name, crop_processor, crop_processor_res, crop_pixel_perfect, crop_resize_mode, 
-                                                img2img_width if is_img2img else txt2img_width, img2img_height if is_img2img else txt2img_height, 
-                                                crop_category_input, crop_batch_dilation_amt, crop_batch_source_dir, crop_batch_dest_dir, 
-                                                crop_batch_save_image, crop_batch_save_mask, crop_batch_save_image_with_mask, crop_batch_save_background, *auto_sam_config],
-                                        outputs=[crop_batch_progress])
+                                # with gr.TabItem(label="Batch Process"):
+                                #     crop_batch_dilation_amt, crop_batch_source_dir, crop_batch_dest_dir, _, crop_batch_save_image, crop_batch_save_mask, crop_batch_save_image_with_mask, crop_batch_save_background, crop_batch_run_button, crop_batch_progress = ui_batch(False)
+                                #     crop_batch_run_button.click(
+                                #         fn=categorical_mask_batch,
+                                #         inputs=[sam_model_name, crop_processor, crop_processor_res, crop_pixel_perfect, crop_resize_mode, 
+                                #                 img2img_width if is_img2img else txt2img_width, img2img_height if is_img2img else txt2img_height, 
+                                #                 crop_category_input, crop_batch_dilation_amt, crop_batch_source_dir, crop_batch_dest_dir, 
+                                #                 crop_batch_save_image, crop_batch_save_mask, crop_batch_save_image_with_mask, crop_batch_save_background, *auto_sam_config],
+                                #         outputs=[crop_batch_progress])
                             
                             
                 with gr.TabItem(label="Upload Mask to ControlNet Inpainting"):
