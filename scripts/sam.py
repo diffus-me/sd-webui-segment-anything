@@ -690,6 +690,11 @@ def ui_processor(use_random=True, use_cnet=True):
         show_progress=False)
     return cnet_seg_processor, cnet_seg_processor_res, cnet_seg_gallery_input, cnet_seg_pixel_perfect, cnet_seg_resize_mode
 
+
+def update_image_display_size():
+    return gr.Image.update(width="100%", height="100%")
+
+
 class Script(scripts.Script):
 
     def title(self):
@@ -732,6 +737,11 @@ class Script(scripts.Script):
                         inputs=[],
                         outputs=[sam_input_image],
                         _js=f"monitorImageResolution('{tab_prefix}dino_run_interface')",
+                    )
+                    sam_input_image.change(
+                        update_image_display_size,
+                        inputs=[],
+                        outputs=[sam_input_image],
                     )
                     sam_remove_dots = gr.Button(value="Remove all point prompts")
                     sam_dummy_component = gr.Label(visible=False)
@@ -847,6 +857,11 @@ class Script(scripts.Script):
                                 outputs=[cnet_seg_input_image],
                                 _js=f"monitorImageResolution('{tab_prefix}cnet_seg_run_interface')",
                             )
+                            cnet_seg_input_image.change(
+                                update_image_display_size,
+                                inputs=[],
+                                outputs=[cnet_seg_input_image],
+                            )
 
                             cnet_seg_output_gallery = gr.Gallery(label="Auto segmentation output", columns=2)
                             cnet_seg_submit = gr.Button(value="Preview segmentation image", elem_id=f"{tab_prefix}cnet_seg_run_button")
@@ -902,6 +917,11 @@ class Script(scripts.Script):
                                         inputs=[],
                                         outputs=[crop_input_image],
                                         _js=f"monitorImageResolution('{tab_prefix}crop_run_interface')",
+                                    )
+                                    crop_input_image.change(
+                                        update_image_display_size,
+                                        inputs=[],
+                                        outputs=[crop_input_image],
                                     )
                                     crop_output_gallery = gr.Gallery(label="Output", columns=3)
                                     crop_padding = gr.Number(value=-2, visible=False, interactive=False, precision=0)
