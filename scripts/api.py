@@ -8,7 +8,8 @@ from PIL import Image
 import numpy as np
 
 from modules.api.api import encode_pil_to_base64, decode_base64_to_image
-from scripts.sam import categorical_mask_wrapper, dino_predict_wrapper, sam_predict_wrapper, update_mask, cnet_seg_wrapper
+from modules.system_monitor import monitor_call_context
+from scripts.sam import categorical_mask_wrapper, dino_predict_internal_wrapper, sam_predict_internal, update_mask, cnet_seg_wrapper
 from scripts.sam import sam_model_list
 
 
@@ -49,6 +50,7 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         return sam_model_list
 
     class SamPredictRequest(BaseModel):
+        task_id: str
         sam_model_name: str = "sam_vit_h_4b8939.pth"
         input_image: str
         sam_positive_points: List[List[float]] = []
@@ -59,35 +61,52 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         dino_box_threshold: Optional[float] = 0.3
         dino_preview_checkbox: bool = False
         dino_preview_boxes_selection: Optional[List[int]] = None
+        boxes: list[list[float]] | None = None
 
     @app.post("/sam/sam-predict")
     async def api_sam_predict(request: Request, payload: SamPredictRequest = Body(...)) -> Any:
         print(f"SAM API /sam/sam-predict received request")
         payload.input_image = decode_to_pil(payload.input_image).convert('RGBA')
-        sam_output_mask_gallery, sam_message = sam_predict_wrapper(
+
+        with monitor_call_context(
             request,
-            f"task({uuid4()})",
-            payload.sam_model_name,
-            payload.input_image,
-            payload.sam_positive_points,
-            payload.sam_negative_points,
-            payload.dino_enabled,
-            payload.dino_model_name,
-            payload.dino_text_prompt,
-            payload.dino_box_threshold,
-            payload.dino_preview_checkbox,
-            payload.dino_preview_boxes_selection)
-        print(f"SAM API /sam/sam-predict finished with message: {sam_message}")
-        result = {
-            "msg": sam_message,
-        }
-        if len(sam_output_mask_gallery) == 9:
-            result["blended_images"] = list(map(encode_to_base64, sam_output_mask_gallery[:3]))
-            result["masks"] = list(map(encode_to_base64, sam_output_mask_gallery[3:6]))
-            result["masked_images"] = list(map(encode_to_base64, sam_output_mask_gallery[6:]))
-        return result
+            "extensions.segment_anything",
+            "extensions.segment_anything",
+            payload.task_id,
+            decoded_params={
+                "width": payload.input_image.width,
+                "height": payload.input_image.height,
+                "n_iter": 1,
+            },
+            is_intermediate=False,
+            only_available_for=["plus", "pro", "api"]
+        ):
+            results, message = sam_predict_internal(
+                request,
+                payload.sam_model_name,
+                payload.input_image,
+                payload.sam_positive_points,
+                payload.sam_negative_points,
+                payload.dino_enabled,
+                payload.dino_model_name,
+                payload.dino_text_prompt,
+                payload.dino_box_threshold,
+                payload.dino_preview_checkbox,
+                payload.dino_preview_boxes_selection,
+                payload.boxes,
+                False,
+            )
+            print(f"SAM API /sam/sam-predict finished with message: {message}")
+            if not results:
+                raise ValueError(message)
+
+            _, masks, _ = results
+            assert len(masks) == 1
+
+            return {"mask": encode_to_base64(np.any(masks[0], axis=0))}
 
     class DINOPredictRequest(BaseModel):
+        task_id: str
         input_image: str
         dino_model_name: str = "GroundingDINO_SwinT_OGC (694MB)"
         text_prompt: str
@@ -97,22 +116,34 @@ def sam_api(_: gr.Blocks, app: FastAPI):
     async def api_dino_predict(request: Request, payload: DINOPredictRequest = Body(...)) -> Any:
         print(f"SAM API /sam/dino-predict received request")
         payload.input_image = decode_to_pil(payload.input_image)
-        dino_output_img, _, dino_msg = dino_predict_wrapper(
+
+        with monitor_call_context(
             request,
-            f"task({uuid4()})",
-            payload.input_image,
-            payload.dino_model_name,
-            payload.text_prompt,
-            payload.box_threshold)
-        if "value" in dino_msg:
-            dino_msg = dino_msg["value"]
-        else:
-            dino_msg = "Done"
-        print(f"SAM API /sam/dino-predict finished with message: {dino_msg}")
-        return {
-            "msg": dino_msg,
-            "image_with_box": encode_to_base64(dino_output_img) if dino_output_img is not None else None,
-        }
+            "extensions.segment_anything",
+            "extensions.segment_anything",
+            payload.task_id,
+            decoded_params={
+                "width": payload.input_image.width,
+                "height": payload.input_image.height,
+                "n_iter": 1,
+            },
+            is_intermediate=False,
+            only_available_for=["plus", "pro", "api"]
+        ):
+            boxes_filt, _ = dino_predict_internal_wrapper(
+                request,
+                payload.input_image,
+                payload.dino_model_name,
+                payload.text_prompt,
+                payload.box_threshold
+            )
+            print(f"SAM API /sam/dino-predict finished")
+            return {
+                "detections": [
+                    dict(zip(("xmin", "ymin", "xmax", "ymax"), box))
+                    for box in boxes_filt.tolist()
+                ]
+            }
 
     class DilateMaskRequest(BaseModel):
         input_image: str
