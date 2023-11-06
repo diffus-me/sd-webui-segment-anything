@@ -202,9 +202,19 @@ def sam_predict_wrapper(request: gr.Request, id_task, sam_model_name, input_imag
         return sam_predict(request, sam_model_name, input_image, *args, **kwargs)
 
 
-def sam_predict(request: gr.Request, sam_model_name, input_image, positive_points, negative_points,
+def sam_predict(*args, **kwargs):
+    results, message = sam_predict_internal(*args, **kwargs)
+    if not results:
+        return results, message
+
+    image_np, masks, boxes_filt = results
+
+    return create_mask_output(image_np, masks, boxes_filt), message
+
+
+def sam_predict_internal(request: gr.Request, sam_model_name, input_image, positive_points, negative_points,
                 dino_checkbox, dino_model_name, text_prompt, box_threshold,
-                dino_preview_checkbox, dino_preview_boxes_selection):
+                dino_preview_checkbox, dino_preview_boxes_selection, boxes_filt=None, multimask_output=True):
     print("Start SAM Processing")
     if sam_model_name is None:
         return [], "SAM model not found. Please download SAM model from extension README."
@@ -213,25 +223,18 @@ def sam_predict(request: gr.Request, sam_model_name, input_image, positive_point
     image_np = np.array(input_image)
     image_np_rgb = image_np[..., :3]
     dino_enabled = dino_checkbox and text_prompt is not None
-    boxes_filt = None
+    # boxes_filt = None
     sam_predict_result = " done."
-    if dino_enabled:
-        with monitor_call_context(
-            request,
-            "extensions.segment_anything",
-            "extensions.segment_anything",
-            decoded_params={
-                "width": input_image.width,
-                "height": input_image.height,
-                "n_iter": 1,
-            },
-            only_available_for=["plus", "pro", "api"]
-        ):
-            boxes_filt, install_success = dino_predict_internal(input_image, dino_model_name, text_prompt, box_threshold)
 
-        if dino_preview_checkbox is not None and dino_preview_checkbox and dino_preview_boxes_selection is not None:
-            valid_indices = [int(i) for i in dino_preview_boxes_selection if int(i) < boxes_filt.shape[0]]
-            boxes_filt = boxes_filt[valid_indices]
+    if boxes_filt is not None:
+        boxes_filt = torch.Tensor(boxes_filt)
+    elif dino_enabled:
+        boxes_filt, install_success = dino_predict_internal_wrapper(request, input_image, dino_model_name, text_prompt, box_threshold)
+
+    if boxes_filt is not None and dino_preview_checkbox and dino_preview_boxes_selection is not None:
+        valid_indices = [int(i) for i in dino_preview_boxes_selection if int(i) < boxes_filt.shape[0]]
+        boxes_filt = boxes_filt[valid_indices]
+
     sam = init_sam_model(sam_model_name)
     print(f"Running SAM Inference {image_np_rgb.shape}")
     predictor = SamPredictorHQ(sam, 'hq' in sam_model_name)
@@ -244,12 +247,10 @@ def sam_predict(request: gr.Request, sam_model_name, input_image, positive_point
         "extensions.segment_anything",
         decoded_params={
             "width": input_image.width,
-            "height": input_image.height,
-            "n_iter": 1,
         },
         only_available_for=["plus", "pro", "api"]
     ):
-        if dino_enabled and boxes_filt.shape[0] > 1:
+        if boxes_filt.shape[0] > 1:
             sam_predict_status = f"SAM inference with {boxes_filt.shape[0]} boxes, point prompts discarded"
             print(sam_predict_status)
             transformed_boxes = predictor.transform.apply_boxes_torch(boxes_filt, image_np.shape[:2])
@@ -257,7 +258,7 @@ def sam_predict(request: gr.Request, sam_model_name, input_image, positive_point
                 point_coords=None,
                 point_labels=None,
                 boxes=transformed_boxes.to(sam_device),
-                multimask_output=True)
+                multimask_output=multimask_output)
             masks = masks.permute(1, 0, 2, 3).cpu().numpy()
         else:
             num_box = 0 if boxes_filt is None else boxes_filt.shape[0]
@@ -276,11 +277,11 @@ def sam_predict(request: gr.Request, sam_model_name, input_image, positive_point
                 point_coords=point_coords if len(point_coords) > 0 else None,
                 point_labels=point_labels if len(point_coords) > 0 else None,
                 box=box,
-                multimask_output=True)
+                multimask_output=multimask_output)
             masks = masks[:, None, ...]
 
     garbage_collect(sam)
-    return create_mask_output(image_np, masks, boxes_filt), sam_predict_status + sam_predict_result + (f" However, GroundingDINO installment has failed. Your process automatically fall back to local groundingdino. Check your terminal for more detail and {dino_install_issue_text}." if (dino_enabled and not install_success) else "")
+    return [image_np, masks, boxes_filt], sam_predict_status + sam_predict_result + (f" However, GroundingDINO installment has failed. Your process automatically fall back to local groundingdino. Check your terminal for more detail and {dino_install_issue_text}." if (dino_enabled and not install_success) else "")
 
 
 def dino_predict_wrapper(request: gr.Request, id_task: str, input_image, *args, **kwargs):
@@ -307,6 +308,13 @@ def dino_predict(request: gr.Request, input_image, dino_model_name, text_prompt,
         return None, gr.update(), gr.update(visible=True, value=f"GroundingDINO requires text prompt.")
     image_np = np.array(input_image)
 
+    boxes_filt, install_success = dino_predict_internal_wrapper(request, input_image, dino_model_name, text_prompt, box_threshold)
+    boxes_filt = boxes_filt.numpy()
+    boxes_choice = [str(i) for i in range(boxes_filt.shape[0])]
+    return Image.fromarray(show_boxes(image_np, boxes_filt.astype(int), show_index=True)), gr.update(choices=boxes_choice, value=boxes_choice), gr.update(visible=False) if install_success else gr.update(visible=True, value=f"GroundingDINO installment failed. Your process automatically fall back to local groundingdino. See your terminal for more detail and {dino_install_issue_text}")
+
+
+def dino_predict_internal_wrapper(request: gr.Request, input_image, dino_model_name, text_prompt, box_threshold):
     with monitor_call_context(
         request,
         "extensions.segment_anything",
@@ -318,11 +326,7 @@ def dino_predict(request: gr.Request, input_image, dino_model_name, text_prompt,
         },
         only_available_for=["plus", "pro", "api"]
     ):
-        boxes_filt, install_success = dino_predict_internal(input_image, dino_model_name, text_prompt, box_threshold)
-
-    boxes_filt = boxes_filt.numpy()
-    boxes_choice = [str(i) for i in range(boxes_filt.shape[0])]
-    return Image.fromarray(show_boxes(image_np, boxes_filt.astype(int), show_index=True)), gr.update(choices=boxes_choice, value=boxes_choice), gr.update(visible=False) if install_success else gr.update(visible=True, value=f"GroundingDINO installment failed. Your process automatically fall back to local groundingdino. See your terminal for more detail and {dino_install_issue_text}")
+        return dino_predict_internal(input_image, dino_model_name, text_prompt, box_threshold)
 
 
 def dino_batch_process(
