@@ -247,6 +247,8 @@ def sam_predict_internal(request: gr.Request, sam_model_name, input_image, posit
         "extensions.segment_anything",
         decoded_params={
             "width": input_image.width,
+            "height": input_image.height,
+            "n_iter": 1,
         },
         only_available_for=["plus", "pro", "api"]
     ):
