@@ -6,6 +6,7 @@ from uuid import uuid4
 import gradio as gr
 from PIL import Image
 import numpy as np
+from starlette.datastructures import MutableHeaders
 
 from modules.api.api import encode_pil_to_base64, decode_base64_to_image
 from modules.system_monitor import monitor_call_context
@@ -68,6 +69,7 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         print(f"SAM API /sam/sam-predict received request")
         payload.input_image = decode_to_pil(payload.input_image).convert('RGBA')
 
+        MutableHeaders.__setitem__(request.headers, "x-task-id", payload.task_id)
         with monitor_call_context(
             request,
             "extensions.segment_anything",
@@ -117,6 +119,7 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         print(f"SAM API /sam/dino-predict received request")
         payload.input_image = decode_to_pil(payload.input_image)
 
+        MutableHeaders.__setitem__(request.headers, "x-task-id", payload.task_id)
         with monitor_call_context(
             request,
             "extensions.segment_anything",
