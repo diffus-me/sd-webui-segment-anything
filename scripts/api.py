@@ -63,6 +63,7 @@ def sam_api(_: gr.Blocks, app: FastAPI):
         dino_preview_checkbox: bool = False
         dino_preview_boxes_selection: Optional[List[int]] = None
         boxes: list[list[float]] | None = None
+        multimask_output: bool = True
 
     @app.post("/sam/sam-predict")
     async def api_sam_predict(request: Request, payload: SamPredictRequest = Body(...)) -> Any:
@@ -96,16 +97,18 @@ def sam_api(_: gr.Blocks, app: FastAPI):
                 payload.dino_preview_checkbox,
                 payload.dino_preview_boxes_selection,
                 payload.boxes,
-                False,
+                payload.multimask_output,
             )
             print(f"SAM API /sam/sam-predict finished with message: {message}")
             if not results:
                 raise ValueError(message)
 
-            _, masks, _ = results
-            assert len(masks) == 1
+            _, masks, qualities, _ = results
 
-            return {"mask": encode_to_base64(np.any(masks[0], axis=0))}
+            return {
+                "masks": [encode_to_base64(np.any(mask, axis=0)) for mask in masks],
+                "qualities": qualities.tolist(),
+            }
 
     class DINOPredictRequest(BaseModel):
         task_id: str
