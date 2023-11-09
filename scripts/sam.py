@@ -207,7 +207,7 @@ def sam_predict(*args, **kwargs):
     if not results:
         return results, message
 
-    image_np, masks, boxes_filt = results
+    image_np, masks, _, boxes_filt = results
 
     return create_mask_output(image_np, masks, boxes_filt), message
 
@@ -256,7 +256,7 @@ def sam_predict_internal(request: gr.Request, sam_model_name, input_image, posit
             sam_predict_status = f"SAM inference with {boxes_filt.shape[0]} boxes, point prompts discarded"
             print(sam_predict_status)
             transformed_boxes = predictor.transform.apply_boxes_torch(boxes_filt, image_np.shape[:2])
-            masks, _, _ = predictor.predict_torch(
+            masks, qualities, _ = predictor.predict_torch(
                 point_coords=None,
                 point_labels=None,
                 boxes=transformed_boxes.to(sam_device),
@@ -275,7 +275,7 @@ def sam_predict_internal(request: gr.Request, sam_model_name, input_image, posit
             point_coords = np.array(positive_points + negative_points)
             point_labels = np.array([1] * len(positive_points) + [0] * len(negative_points))
             box = copy.deepcopy(boxes_filt[0].numpy()) if boxes_filt is not None and boxes_filt.shape[0] > 0 else None
-            masks, _, _ = predictor.predict(
+            masks, qualities, _ = predictor.predict(
                 point_coords=point_coords if len(point_coords) > 0 else None,
                 point_labels=point_labels if len(point_coords) > 0 else None,
                 box=box,
@@ -283,7 +283,7 @@ def sam_predict_internal(request: gr.Request, sam_model_name, input_image, posit
             masks = masks[:, None, ...]
 
     garbage_collect(sam)
-    return [image_np, masks, boxes_filt], sam_predict_status + sam_predict_result + (f" However, GroundingDINO installment has failed. Your process automatically fall back to local groundingdino. Check your terminal for more detail and {dino_install_issue_text}." if (dino_enabled and not install_success) else "")
+    return [image_np, masks, qualities, boxes_filt], sam_predict_status + sam_predict_result + (f" However, GroundingDINO installment has failed. Your process automatically fall back to local groundingdino. Check your terminal for more detail and {dino_install_issue_text}." if (dino_enabled and not install_success) else "")
 
 
 def dino_predict_wrapper(request: gr.Request, id_task: str, input_image, *args, **kwargs):
