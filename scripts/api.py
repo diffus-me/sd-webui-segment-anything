@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI, Body, Request
+from fastapi import FastAPI, Body, Request, HTTPException, status
 from pydantic import BaseModel
 from typing import Any, Optional, List
 from uuid import uuid4
@@ -101,7 +101,10 @@ def sam_api(_: gr.Blocks, app: FastAPI):
             )
             print(f"SAM API /sam/sam-predict finished with message: {message}")
             if not results:
-                raise ValueError(message)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=message,
+                )
 
             _, masks, qualities, _ = results
 
