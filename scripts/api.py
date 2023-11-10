@@ -108,6 +108,9 @@ def sam_api(_: gr.Blocks, app: FastAPI):
 
             _, masks, qualities, _ = results
 
+            if len(qualities.shape) == 2:
+                qualities = qualities.mean(axis=0)
+
             return {
                 "masks": [encode_to_base64(np.any(mask, axis=0)) for mask in masks],
                 "qualities": qualities.tolist(),
