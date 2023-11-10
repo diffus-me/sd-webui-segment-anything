@@ -230,10 +230,12 @@ def sam_predict_internal(request: gr.Request, sam_model_name, input_image, posit
         boxes_filt = torch.Tensor(boxes_filt)
     elif dino_enabled:
         boxes_filt, install_success = dino_predict_internal_wrapper(request, input_image, dino_model_name, text_prompt, box_threshold)
+        if boxes_filt.shape[0] == 0:
+            return [], "GroundingDINO failed to find boxed fit the input text prompt."
 
-    if boxes_filt is not None and dino_preview_checkbox and dino_preview_boxes_selection is not None:
-        valid_indices = [int(i) for i in dino_preview_boxes_selection if int(i) < boxes_filt.shape[0]]
-        boxes_filt = boxes_filt[valid_indices]
+        if dino_preview_checkbox and dino_preview_boxes_selection is not None:
+            valid_indices = [int(i) for i in dino_preview_boxes_selection if int(i) < boxes_filt.shape[0]]
+            boxes_filt = boxes_filt[valid_indices]
 
     sam = init_sam_model(sam_model_name)
     print(f"Running SAM Inference {image_np_rgb.shape}")
@@ -252,7 +254,7 @@ def sam_predict_internal(request: gr.Request, sam_model_name, input_image, posit
         },
         only_available_for=["plus", "pro", "api"]
     ):
-        if boxes_filt.shape[0] > 1:
+        if boxes_filt is not None and boxes_filt.shape[0] > 1:
             sam_predict_status = f"SAM inference with {boxes_filt.shape[0]} boxes, point prompts discarded"
             print(sam_predict_status)
             transformed_boxes = predictor.transform.apply_boxes_torch(boxes_filt, image_np.shape[:2])
