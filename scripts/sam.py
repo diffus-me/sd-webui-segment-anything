@@ -733,7 +733,7 @@ class Script(scripts.Script):
             priorize_sam_scripts(is_img2img)
         tab_prefix = ("img2img" if is_img2img else "txt2img") + "_sam_"
         ui_process = ()
-        with gr.Accordion('Segment Anything', open=False, elem_id="segment_anything"):
+        with gr.Accordion('Object Segmentation (Segment Anything)', open=False, elem_id="segment_anything"):
             id_task = gr.Label(visible=False)
             with gr.Row():
                 with gr.Column(scale=10):
