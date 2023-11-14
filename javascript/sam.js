@@ -118,7 +118,9 @@ function submit_dino() {
     return res
 }
 
-function submit_sam() {
+async function submit_sam() {
+    await tierCheckButtonInternal("SegmentAnything");
+
     let res = create_submit_sam_args(arguments);
     let positive_points = [];
     let negative_points = [];
