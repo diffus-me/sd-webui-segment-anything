@@ -306,7 +306,6 @@ def dino_predict_wrapper(request: gr.Request, input_image, *args, **kwargs):
             "n_iter": 1,
         },
         is_intermediate=False,
-        only_available_for=["plus", "pro", "api"]
     ):
         return dino_predict(request, input_image, *args, **kwargs)
 
@@ -334,7 +333,6 @@ def dino_predict_internal_wrapper(request: gr.Request, input_image, dino_model_n
             "height": input_image.height,
             "n_iter": 1,
         },
-        only_available_for=["plus", "pro", "api"]
     ):
         return dino_predict_internal(input_image, dino_model_name, text_prompt, box_threshold)
 
@@ -893,6 +891,7 @@ class Script(scripts.Script):
                             cnet_seg_status = gr.Text(value="", label="Segmentation status")
                             cnet_seg_submit.click(
                                 fn=cnet_seg_wrapper,
+                                _js="tierCheckButton('SegmentAnything')",
                                 inputs=[sam_model_name, cnet_seg_input_image, cnet_seg_processor, cnet_seg_processor_res, cnet_seg_pixel_perfect, cnet_seg_resize_mode, img2img_width if is_img2img else txt2img_width, img2img_height if is_img2img else txt2img_height, *auto_sam_config],
                                 outputs=[cnet_seg_output_gallery, cnet_seg_status])
                             with gr.Row(visible=(max_cn_num() > 0)):
@@ -954,6 +953,7 @@ class Script(scripts.Script):
                                     crop_result = gr.Text(value="", label="Categorical mask status")
                                     crop_submit.click(
                                         fn=categorical_mask_wrapper,
+                                        _js="tierCheckButton('SegmentAnything')",
                                         inputs=[sam_model_name, crop_processor, crop_processor_res, crop_pixel_perfect, crop_resize_mode, 
                                                 img2img_width if is_img2img else txt2img_width, img2img_height if is_img2img else txt2img_height, 
                                                 crop_category_input, crop_input_image, *auto_sam_config],
