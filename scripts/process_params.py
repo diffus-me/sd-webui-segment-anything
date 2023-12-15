@@ -1,8 +1,19 @@
+import os
+from io import BytesIO
 from typing import Tuple, List, Dict
 from PIL import Image, ImageOps, ImageEnhance, ImageFilter
 import numpy as np
 from modules import shared
+import requests
 
+
+def _open_gallery_image(gallery_image: dict[str, str]) -> Image.Image:
+    if os.path.exists(gallery_image["name"]):
+        return Image.open(gallery_image["name"])
+
+    response = requests.get(gallery_image["data"])
+    response.raise_for_status()
+    return Image.open(BytesIO(response.content))
 
 def max_cn_num():
     if shared.opts.data is None:
@@ -40,9 +51,9 @@ class SAMInpaintUnit:
         image, mask = None, None
         if self.inpaint_upload_enable and self.input_image is not None and self.output_mask_gallery is not None:
             if self.dilation_checkbox and self.dilation_output_gallery is not None:
-                mask = Image.open(self.dilation_output_gallery[1]['name']).convert('L')
+                mask = _open_gallery_image(self.dilation_output_gallery[1]).convert('L')
             elif self.output_mask_gallery is not None:
-                mask = Image.open(self.output_mask_gallery[self.output_chosen_mask + 3]['name']).convert('L')
+                mask = _open_gallery_image(self.output_mask_gallery[self.output_chosen_mask + 3]).convert('L')
             if mask is not None and self.cnet_inpaint_invert:
                 mask = ImageOps.invert(mask)
             # if self.is_img2img and self.sketch_checkbox and self.inpaint_color_sketch is not None and mask is not None:
@@ -114,7 +125,7 @@ class SAMProcessUnit:
             if len(self.cnet_seg_output_gallery) == 3 and self.cnet_seg_gallery_input is not None:
                 cnet_seg_gallery_index += self.cnet_seg_gallery_input
             self.set_p_value(p, 'control_net_input_image', self.cnet_seg_idx, 
-                             Image.open(self.cnet_seg_output_gallery[cnet_seg_gallery_index]['name']))
+                             _open_gallery_image(self.cnet_seg_output_gallery[cnet_seg_gallery_index]))
         
         if self.cnet_upload_enable and self.cnet_upload_img_inpaint is not None and self.cnet_upload_mask_inpaint is not None:
             self.set_p_value(p, 'control_net_input_image', self.cnet_upload_num, 
