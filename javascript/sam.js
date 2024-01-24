@@ -22,15 +22,18 @@ function switchToInpaintUpload() {
 }
 
 function samTabPrefix() {
-    const tabs = gradioApp().querySelector('#tabs');
-    if (tabs) {
-        const buttons = tabs.querySelectorAll('button');
-        if (buttons) {
-            if (buttons[0].className.includes("selected")) {
-                return "txt2img_sam_"
-            } else if (buttons[1].className.includes("selected")) {
-                return "img2img_sam_"
+    const tabItems = gradioApp().querySelectorAll('#tabs > .tabitem');
+    const buttons = gradioApp().querySelectorAll("#tabs > div.tab-nav > button")
+
+    for (let [tabItem, button] of PYTHON.zip(tabItems, buttons)) {
+        if (button.className.startsWith("selected")) {
+            if (tabItem.id === "tab_txt2img") {
+                return "txt2img_sam_";
             }
+            if (tabItem.id === "tab_img2img") {
+                return "img2img_sam_";
+            }
+            return "_sam_"
         }
     }
     return "_sam_"
