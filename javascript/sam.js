@@ -111,6 +111,9 @@ function create_submit_sam_args(args) {
 
 
 function submit_dino() {
+    const tab_prefix = samTabPrefix();
+    addGenerateGtagEvent(`#${tab_prefix}dino_run_button > span`, `${tab_prefix}dino_generation_button`);
+
     res = []
     for (var i = 0; i < arguments.length; i++) {
         res.push(arguments[i])
@@ -122,6 +125,8 @@ function submit_dino() {
 }
 
 async function submit_sam() {
+    const tab_prefix = samTabPrefix();
+    addGenerateGtagEvent(`#${tab_prefix}run_button > span`, `${tab_prefix}generation_button`);
     await tierCheckButtonInternal("SegmentAnything");
 
     let res = create_submit_sam_args(arguments);
@@ -194,6 +199,19 @@ onUiUpdate(() => {
     }
 })
 
+async function submit_cneg_seg() {
+    const tab_prefix = samTabPrefix();
+    addGenerateGtagEvent(`#${tab_prefix}cnet_seg_run_button > span`, `${tab_prefix}cnet_seg_generation_button`);
+    await tierCheckButtonInternal("SegmentAnything");
+    return arguments;
+}
+
+async function submit_crop() {
+    const tab_prefix = samTabPrefix();
+    addGenerateGtagEvent(`#${tab_prefix}crop_run_button > span`, `${tab_prefix}crop_generation_button`);
+    await tierCheckButtonInternal("SegmentAnything");
+    return arguments;
+}
 
 function monitorImageResolution(tab_id) {
     return async (...values) => {
