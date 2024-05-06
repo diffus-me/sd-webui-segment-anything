@@ -80,10 +80,12 @@ def load_sam_model(sam_checkpoint):
         model_type = '_'.join(model_type.split('_')[:-1])
     sam_checkpoint_path = os.path.join(sam_model_dir, sam_checkpoint)
     torch.load = unsafe_torch_load
-    sam = sam_model_registry[model_type](checkpoint=sam_checkpoint_path)
-    sam.to(device=sam_device)
-    sam.eval()
-    torch.load = load
+    try:
+        sam = sam_model_registry[model_type](checkpoint=sam_checkpoint_path)
+        sam.to(device=sam_device)
+        sam.eval()
+    finally:
+        torch.load = load
     return sam
 
 
