@@ -4,15 +4,26 @@ import cv2
 import copy
 import torch
 from collections import OrderedDict
+from pathlib import Path
+import shutil
 
 from modules import scripts, shared
 from modules.devices import device, torch_gc, cpu
+from modules.paths import models_path
 import local_groundingdino
 
 
 dino_model_cache = OrderedDict()
 sam_extension_dir = scripts.basedir()
-dino_model_dir = os.path.join(sam_extension_dir, "models/grounding-dino")
+dino_model_script_dir = Path(sam_extension_dir) / "models" / "grounding-dino"
+dino_model_dir = Path(models_path) / "grounding-dino"
+dino_model_dir.mkdir(exist_ok=True)
+
+for dino_model_script_path in dino_model_script_dir.glob("*.py"):
+    target_path = dino_model_dir / dino_model_script_path.name
+    if not target_path.exists():
+        shutil.copy(dino_model_script_path, target_path)
+
 dino_model_list = ["GroundingDINO_SwinT_OGC (694MB)", "GroundingDINO_SwinB (938MB)"]
 dino_model_info = {
     "GroundingDINO_SwinT_OGC (694MB)": {
