@@ -796,19 +796,19 @@ class Script(scripts.Script):
                         sam_dilation_checkbox, sam_dilation_output_gallery)
                     ui_process += sam_single_image_process
 
-                with gr.TabItem(label="Batch Process"):
-                    gr.Markdown(value="You may configurate the following items and generate masked image for all images under a directory. This mode is designed for generating LoRA/LyCORIS training set.")
-                    gr.Markdown(value="The current workflow is [text prompt]->[object detection]->[segmentation]. Semantic segmentation support is in Auto SAM panel.")
-                    dino_batch_model_name = gr.Dropdown(label="GroundingDINO Model (Auto download from huggingface)", choices=dino_model_list, value=dino_model_list[0])
-                    dino_batch_text_prompt = gr.Textbox(label="GroundingDINO Detection Prompt")
-                    dino_batch_box_threshold = gr.Slider(label="GroundingDINO Box Threshold", minimum=0.0, maximum=1.0, value=0.3, step=0.001)
-                    dino_batch_dilation_amt, dino_batch_source_dir, dino_batch_dest_dir, dino_batch_output_per_image, dino_batch_save_image, dino_batch_save_mask, dino_batch_save_image_with_mask, dino_batch_save_background, dino_batch_run_button, dino_batch_progress = ui_batch(True)
-                    dino_batch_run_button.click(
-                        fn=dino_batch_process,
-                        inputs=[sam_model_name, dino_batch_model_name, dino_batch_text_prompt, dino_batch_box_threshold, dino_batch_dilation_amt,
-                                dino_batch_source_dir, dino_batch_dest_dir, dino_batch_output_per_image, 
-                                dino_batch_save_image, dino_batch_save_mask, dino_batch_save_background, dino_batch_save_image_with_mask],
-                        outputs=[dino_batch_progress])
+                # with gr.TabItem(label="Batch Process"):
+                #     gr.Markdown(value="You may configurate the following items and generate masked image for all images under a directory. This mode is designed for generating LoRA/LyCORIS training set.")
+                #     gr.Markdown(value="The current workflow is [text prompt]->[object detection]->[segmentation]. Semantic segmentation support is in Auto SAM panel.")
+                #     dino_batch_model_name = gr.Dropdown(label="GroundingDINO Model (Auto download from huggingface)", choices=dino_model_list, value=dino_model_list[0])
+                #     dino_batch_text_prompt = gr.Textbox(label="GroundingDINO Detection Prompt")
+                #     dino_batch_box_threshold = gr.Slider(label="GroundingDINO Box Threshold", minimum=0.0, maximum=1.0, value=0.3, step=0.001)
+                #     dino_batch_dilation_amt, dino_batch_source_dir, dino_batch_dest_dir, dino_batch_output_per_image, dino_batch_save_image, dino_batch_save_mask, dino_batch_save_image_with_mask, dino_batch_save_background, dino_batch_run_button, dino_batch_progress = ui_batch(True)
+                #     dino_batch_run_button.click(
+                #         fn=dino_batch_process,
+                #         inputs=[sam_model_name, dino_batch_model_name, dino_batch_text_prompt, dino_batch_box_threshold, dino_batch_dilation_amt,
+                #                 dino_batch_source_dir, dino_batch_dest_dir, dino_batch_output_per_image, 
+                #                 dino_batch_save_image, dino_batch_save_mask, dino_batch_save_background, dino_batch_save_image_with_mask],
+                #         outputs=[dino_batch_progress])
                     
                 with gr.TabItem(label="Auto SAM"):
                     gr.Markdown("Auto SAM is mainly for semantic segmentation and image layout generation, which is supported based on ControlNet. You must have ControlNet extension installed, and you should not change its directory name (sd-webui-controlnet).")
@@ -862,30 +862,30 @@ class Script(scripts.Script):
                             auto_sam_process = (cnet_seg_output_gallery, cnet_seg_enable_copy, cnet_seg_idx, cnet_seg_gallery_input)
                             ui_process += auto_sam_process
 
-                        with gr.TabItem(label="Image Layout"):
-                            gr.Markdown("You can generate image layout either in single image or in batch. Since there might be A LOT of outputs, there is no gallery for preview. You need to go to the output folder for either single image or batch process.")
-                            layout_mode = gr.Radio(choices=["single image", "batch process"], value="single image", type="index", label="Choose mode: ")
-                            layout_input_image = gr.Image(label="Image for Image Layout", source="upload", type="pil", image_mode="RGBA")
-                            layout_input_path = gr.Textbox(label="Input path", placeholder="Enter input path", visible=False)
-                            layout_output_path = gr.Textbox(label="Output path", placeholder="Enter output path")
-                            layout_submit_single = gr.Button(value="Generate layout for single image")
-                            layout_submit_batch = gr.Button(value="Generate layout for batch process", visible=False)
-                            layout_status = gr.Text(value="", label="Image layout status")
-                            def layout_show(mode):
-                                is_single = mode == 0
-                                return gr_show(is_single), gr_show(is_single), gr_show(not is_single), gr_show(not is_single)
-                            layout_mode.change(
-                                fn=layout_show,
-                                inputs=[layout_mode],
-                                outputs=[layout_input_image, layout_submit_single, layout_input_path, layout_submit_batch])
-                            layout_submit_single.click(
-                                fn=image_layout,
-                                inputs=[sam_model_name, layout_input_image, layout_output_path, *auto_sam_config],
-                                outputs=[layout_status])
-                            layout_submit_batch.click(
-                                fn=image_layout,
-                                inputs=[sam_model_name, layout_input_path, layout_output_path, *auto_sam_config],
-                                outputs=[layout_status])
+                        # with gr.TabItem(label="Image Layout"):
+                        #     gr.Markdown("You can generate image layout either in single image or in batch. Since there might be A LOT of outputs, there is no gallery for preview. You need to go to the output folder for either single image or batch process.")
+                        #     layout_mode = gr.Radio(choices=["single image", "batch process"], value="single image", type="index", label="Choose mode: ")
+                        #     layout_input_image = gr.Image(label="Image for Image Layout", source="upload", type="pil", image_mode="RGBA")
+                        #     layout_input_path = gr.Textbox(label="Input path", placeholder="Enter input path", visible=False)
+                        #     layout_output_path = gr.Textbox(label="Output path", placeholder="Enter output path")
+                        #     layout_submit_single = gr.Button(value="Generate layout for single image")
+                        #     layout_submit_batch = gr.Button(value="Generate layout for batch process", visible=False)
+                        #     layout_status = gr.Text(value="", label="Image layout status")
+                        #     def layout_show(mode):
+                        #         is_single = mode == 0
+                        #         return gr_show(is_single), gr_show(is_single), gr_show(not is_single), gr_show(not is_single)
+                        #     layout_mode.change(
+                        #         fn=layout_show,
+                        #         inputs=[layout_mode],
+                        #         outputs=[layout_input_image, layout_submit_single, layout_input_path, layout_submit_batch])
+                        #     layout_submit_single.click(
+                        #         fn=image_layout,
+                        #         inputs=[sam_model_name, layout_input_image, layout_output_path, *auto_sam_config],
+                        #         outputs=[layout_status])
+                        #     layout_submit_batch.click(
+                        #         fn=image_layout,
+                        #         inputs=[sam_model_name, layout_input_path, layout_output_path, *auto_sam_config],
+                        #         outputs=[layout_status])
 
                         with gr.TabItem(label="Mask by Category"):
                             gr.Markdown(
@@ -951,24 +951,24 @@ class Script(scripts.Script):
                     cnet_upload_process = (cnet_upload_enable, cnet_upload_num, cnet_upload_img_inpaint, cnet_upload_mask_inpaint)
                     ui_process += cnet_upload_process
 
-                with gr.Row():
-                    switch = gr.Button(value="Switch to Inpaint Upload")
-                    unload = gr.Button(value="Unload all models from memory")
-                    uncheck = gr.Button(value="Uncheck all copies")
-                    switch.click(
-                        fn=lambda _: None,
-                        _js="switchToInpaintUpload",
-                        inputs=[sam_dummy_component],
-                        outputs=None)
-                    unload.click(
-                        fn=clear_cache,
-                        inputs=[],
-                        outputs=[])
-                    uncheck.click(
-                        fn=lambda: (gr.update(value=False), gr.update(value=False), gr.update(value=False)),
-                        inputs=[],
-                        outputs=[sam_inpaint_upload_enable, cnet_seg_enable_copy, crop_inpaint_enable],
-                        show_progress=False)
+                # with gr.Row():
+                #     switch = gr.Button(value="Switch to Inpaint Upload")
+                #     unload = gr.Button(value="Unload all models from memory")
+                #     uncheck = gr.Button(value="Uncheck all copies")
+                #     switch.click(
+                #         fn=lambda _: None,
+                #         _js="switchToInpaintUpload",
+                #         inputs=[sam_dummy_component],
+                #         outputs=None)
+                #     unload.click(
+                #         fn=clear_cache,
+                #         inputs=[],
+                #         outputs=[])
+                #     uncheck.click(
+                #         fn=lambda: (gr.update(value=False), gr.update(value=False), gr.update(value=False)),
+                #         inputs=[],
+                #         outputs=[sam_inpaint_upload_enable, cnet_seg_enable_copy, crop_inpaint_enable],
+                #         show_progress=False)
         
         return ui_process
 
