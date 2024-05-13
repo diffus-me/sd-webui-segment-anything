@@ -82,7 +82,8 @@ def sam_api(_: gr.Blocks, app: FastAPI):
                 "n_iter": 1,
             },
             is_intermediate=False,
-            only_available_for=["plus", "pro", "api"]
+            feature_type="buttons",
+            feature_name="SegmentAnything",
         ):
             results, message = sam_predict_internal(
                 request,
@@ -140,7 +141,8 @@ def sam_api(_: gr.Blocks, app: FastAPI):
                 "n_iter": 1,
             },
             is_intermediate=False,
-            only_available_for=["plus", "pro", "api"]
+            feature_type="buttons",
+            feature_name="SegmentAnything",
         ):
             boxes_filt, _ = dino_predict_internal_wrapper(
                 request,

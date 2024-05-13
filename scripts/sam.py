@@ -203,7 +203,8 @@ def sam_predict_wrapper(request: gr.Request, sam_model_name, input_image, *args,
             "n_iter": 1,
         },
         is_intermediate=False,
-        only_available_for=["plus", "pro", "api"]
+        feature_type="buttons",
+        feature_name="SegmentAnything",
     ):
         return sam_predict(request, sam_model_name, input_image, *args, **kwargs)
 
@@ -258,7 +259,8 @@ def sam_predict_internal(request: gr.Request, sam_model_name, input_image, posit
             "height": input_image.height,
             "n_iter": 1,
         },
-        only_available_for=["plus", "pro", "api"]
+        feature_type="buttons",
+        feature_name="SegmentAnything",
     ):
         if boxes_filt is not None and boxes_filt.shape[0] > 1:
             sam_predict_status = f"SAM inference with {boxes_filt.shape[0]} boxes, point prompts discarded"
@@ -413,7 +415,8 @@ def cnet_seg_wrapper(
             "n_iter": 1,
         },
         is_intermediate=False,
-        only_available_for=["plus", "pro", "api"]
+        feature_type="buttons",
+        feature_name="SegmentAnything",
     ):
         with monitor_call_context(
             request,
@@ -424,7 +427,8 @@ def cnet_seg_wrapper(
                 "height": cnet_seg_input_image.height,
                 "n_iter": 1,
             },
-            only_available_for=["plus", "pro", "api"]
+            feature_type="buttons",
+            feature_name="SegmentAnything",
         ):
             return cnet_seg(sam_model_name, cnet_seg_input_image, *args, **kwargs)
 
@@ -497,7 +501,8 @@ def categorical_mask_wrapper(
             "n_iter": 1,
         },
         is_intermediate=False,
-        only_available_for=["plus", "pro", "api"]
+        feature_type="buttons",
+        feature_name="SegmentAnything",
     ):
         with monitor_call_context(
             request,
@@ -508,7 +513,8 @@ def categorical_mask_wrapper(
                 "height": crop_input_image.height,
                 "n_iter": 1,
             },
-            only_available_for=["plus", "pro", "api"]
+            feature_type="buttons",
+            feature_name="SegmentAnything",
         ):
             return categorical_mask(
                 sam_model_name,
