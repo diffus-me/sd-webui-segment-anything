@@ -202,7 +202,10 @@ def sam_predict_wrapper(request: gr.Request, id_task, sam_model_name, input_imag
         feature_type="buttons",
         feature_name="SegmentAnything",
     ):
-        return sam_predict(request, sam_model_name, input_image, *args, **kwargs)
+        try:
+            return sam_predict(request, sam_model_name, input_image, *args, **kwargs)
+        finally:
+            clear_cache()
 
 
 def sam_predict(*args, **kwargs):
@@ -305,7 +308,10 @@ def dino_predict_wrapper(request: gr.Request, id_task: str, input_image, *args, 
         },
         is_intermediate=False,
     ):
-        return dino_predict(request, input_image, *args, **kwargs)
+        try:
+            return dino_predict(request, input_image, *args, **kwargs)
+        finally:
+            clear_cache()
 
 
 def dino_predict(request: gr.Request, input_image, dino_model_name, text_prompt, box_threshold):
@@ -423,7 +429,10 @@ def cnet_seg_wrapper(
             feature_type="buttons",
             feature_name="SegmentAnything",
         ):
-            return cnet_seg(sam_model_name, cnet_seg_input_image, *args, **kwargs)
+            try:
+                return cnet_seg(sam_model_name, cnet_seg_input_image, *args, **kwargs)
+            finally:
+                clear_cache()
 
 
 def cnet_seg(
@@ -508,19 +517,22 @@ def categorical_mask_wrapper(
             feature_type="buttons",
             feature_name="SegmentAnything",
         ):
-            return categorical_mask(
-                sam_model_name,
-                crop_processor,
-                crop_processor_res,
-                crop_pixel_perfect,
-                crop_resize_mode,
-                target_W,
-                target_H,
-                crop_category_input,
-                crop_input_image,
-                *args,
-                **kwargs
-            )
+            try:
+                return categorical_mask(
+                    sam_model_name,
+                    crop_processor,
+                    crop_processor_res,
+                    crop_pixel_perfect,
+                    crop_resize_mode,
+                    target_W,
+                    target_H,
+                    crop_category_input,
+                    crop_input_image,
+                    *args,
+                    **kwargs
+                )
+            finally:
+                clear_cache()
 
 
 def categorical_mask(
