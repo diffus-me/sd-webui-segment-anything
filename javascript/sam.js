@@ -119,6 +119,7 @@ function submit_dino() {
         res.push(arguments[i])
     }
 
+    res[0] = randomId();
     res[res.length - 2] = null
     res[res.length - 1] = null
     return res
@@ -147,8 +148,10 @@ async function submit_sam() {
             }
         });
     });
-    res[2] = positive_points;
-    res[3] = negative_points;
+
+    res[0] = randomId();
+    res[3] = positive_points;
+    res[4] = negative_points;
     return res
 }
 
@@ -203,14 +206,20 @@ async function submit_cneg_seg() {
     const tab_prefix = samTabPrefix();
     addGenerateGtagEvent(`#${tab_prefix}cnet_seg_run_button > span`, `${tab_prefix}cnet_seg_generation_button`);
     await tierCheckButtonInternal("SegmentAnything");
-    return arguments;
+
+    const res = Array.from(arguments);
+    res[0] = randomId();
+    return res;
 }
 
 async function submit_crop() {
     const tab_prefix = samTabPrefix();
     addGenerateGtagEvent(`#${tab_prefix}crop_run_button > span`, `${tab_prefix}crop_generation_button`);
     await tierCheckButtonInternal("SegmentAnything");
-    return arguments;
+
+    const res = Array.from(arguments);
+    res[0] = randomId();
+    return res;
 }
 
 function monitorImageResolution(tab_id) {

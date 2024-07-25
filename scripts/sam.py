@@ -8,8 +8,6 @@ import torch
 import gradio as gr
 from collections import OrderedDict
 from scipy.ndimage import binary_dilation
-from uuid import uuid4
-from starlette.datastructures import MutableHeaders
 from modules import scripts, shared, script_callbacks
 from modules.ui import gr_show
 from modules.ui_components import FormRow
@@ -189,14 +187,12 @@ def create_mask_batch_output(
 
 
 
-def sam_predict_wrapper(request: gr.Request, sam_model_name, input_image, *args, **kwargs):
-    task_id = str(uuid4())
-    MutableHeaders.__setitem__(request.headers, "x-task-id", task_id)
+def sam_predict_wrapper(request: gr.Request, id_task, sam_model_name, input_image, *args, **kwargs):
     with monitor_call_context(
         request,
         "extensions.segment_anything",
         "extensions.segment_anything",
-        task_id,
+        id_task.removeprefix("task(").removesuffix(")"),
         decoded_params={
             "width": input_image.width,
             "height": input_image.height,
@@ -296,14 +292,12 @@ def sam_predict_internal(request: gr.Request, sam_model_name, input_image, posit
     return [image_np, masks, qualities, boxes_filt], sam_predict_status + sam_predict_result + (f" However, GroundingDINO installment has failed. Your process automatically fall back to local groundingdino. Check your terminal for more detail and {dino_install_issue_text}." if (dino_enabled and not install_success) else "")
 
 
-def dino_predict_wrapper(request: gr.Request, input_image, *args, **kwargs):
-    task_id = str(uuid4())
-    MutableHeaders.__setitem__(request.headers, "x-task-id", task_id)
+def dino_predict_wrapper(request: gr.Request, id_task: str, input_image, *args, **kwargs):
     with monitor_call_context(
         request,
         "extensions.segment_anything",
         "extensions.segment_anything",
-        task_id,
+        id_task.removeprefix("task(").removesuffix(")"),
         decoded_params={
             "width": input_image.width,
             "height": input_image.height,
@@ -397,18 +391,17 @@ def dino_batch_process(
 
 def cnet_seg_wrapper(
         request: gr.Request,
+        id_task,
         sam_model_name,
         cnet_seg_input_image,
         *args,
         **kwargs
 ):
-    task_id = str(uuid4())
-    MutableHeaders.__setitem__(request.headers, "x-task-id", task_id)
     with monitor_call_context(
         request,
         "extensions.segment_anything",
         "extensions.segment_anything",
-        task_id,
+        id_task.removeprefix("task(").removesuffix(")"),
         decoded_params={
             "width": cnet_seg_input_image.width,
             "height": cnet_seg_input_image.height,
@@ -476,6 +469,7 @@ def image_layout(
 
 def categorical_mask_wrapper(
     request: gr.Request,
+    id_task: str,
     sam_model_name,
     crop_processor,
     crop_processor_res,
@@ -488,13 +482,11 @@ def categorical_mask_wrapper(
     *args,
     **kwargs
 ):
-    task_id = str(uuid4())
-    MutableHeaders.__setitem__(request.headers, "x-task-id", task_id)
     with monitor_call_context(
         request,
         "extensions.segment_anything",
         "extensions.segment_anything",
-        task_id,
+        id_task.removeprefix("task(").removesuffix(")"),
         decoded_params={
             "width": crop_input_image.width,
             "height": crop_input_image.height,
@@ -803,7 +795,7 @@ class Script(scripts.Script):
                             dino_preview_boxes_button.click(
                                 fn=dino_predict_wrapper,
                                 _js="submit_dino",
-                                inputs=[sam_input_image, dino_model_name, dino_text_prompt, dino_box_threshold],
+                                inputs=[id_task, sam_input_image, dino_model_name, dino_text_prompt, dino_box_threshold],
                                 outputs=[dino_preview_boxes, dino_preview_boxes_selection, dino_preview_result])
                         dino_preview_checkbox.change(
                             fn=gr_show,
@@ -821,7 +813,7 @@ class Script(scripts.Script):
                     sam_submit.click(
                         fn=sam_predict_wrapper,
                         _js='submit_sam',
-                        inputs=[sam_model_name, sam_input_image,        # SAM
+                        inputs=[id_task, sam_model_name, sam_input_image,        # SAM
                                 sam_dummy_component, sam_dummy_component,   # Point prompts
                                 dino_checkbox, dino_model_name, dino_text_prompt, dino_box_threshold,  # DINO prompts
                                 dino_preview_checkbox, dino_preview_boxes_selection],  # DINO preview prompts
@@ -900,7 +892,7 @@ class Script(scripts.Script):
                             cnet_seg_submit.click(
                                 fn=cnet_seg_wrapper,
                                 _js="submit_cneg_seg",
-                                inputs=[sam_model_name, cnet_seg_input_image, cnet_seg_processor, cnet_seg_processor_res, cnet_seg_pixel_perfect, cnet_seg_resize_mode, img2img_width if is_img2img else txt2img_width, img2img_height if is_img2img else txt2img_height, *auto_sam_config],
+                                inputs=[id_task, sam_model_name, cnet_seg_input_image, cnet_seg_processor, cnet_seg_processor_res, cnet_seg_pixel_perfect, cnet_seg_resize_mode, img2img_width if is_img2img else txt2img_width, img2img_height if is_img2img else txt2img_height, *auto_sam_config],
                                 outputs=[cnet_seg_output_gallery, cnet_seg_status])
                             with gr.Row(visible=(max_cn_num() > 0)):
                                 cnet_seg_enable_copy = gr.Checkbox(value=False, label='Copy to ControlNet Segmentation')
@@ -962,7 +954,7 @@ class Script(scripts.Script):
                                     crop_submit.click(
                                         fn=categorical_mask_wrapper,
                                         _js="submit_crop",
-                                        inputs=[sam_model_name, crop_processor, crop_processor_res, crop_pixel_perfect, crop_resize_mode, 
+                                        inputs=[id_task, sam_model_name, crop_processor, crop_processor_res, crop_pixel_perfect, crop_resize_mode, 
                                                 img2img_width if is_img2img else txt2img_width, img2img_height if is_img2img else txt2img_height, 
                                                 crop_category_input, crop_input_image, *auto_sam_config],
                                         outputs=[crop_output_gallery, crop_result, crop_resized_image])
