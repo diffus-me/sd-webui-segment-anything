@@ -8,7 +8,7 @@ import torch
 import gradio as gr
 from collections import OrderedDict
 from scipy.ndimage import binary_dilation
-from modules import scripts, shared, script_callbacks
+from modules import scripts, shared, script_callbacks, sd_models
 from modules.ui import gr_show
 from modules.ui_components import FormRow
 from modules.safe import unsafe_torch_load, load
@@ -70,6 +70,14 @@ def update_mask(mask_gallery, chosen_mask, dilation_amt, input_image):
     matted_image = np.array(input_image)
     matted_image[~binary_img] = np.array([0, 0, 0, 0])
     return [blended_image, mask_image, Image.fromarray(matted_image)]
+
+
+def unload_sd_models() -> None:
+    sd_models.model_data.sd_model = None
+    sd_models.model_data.loaded_sd_models = []
+    sd_models.model_management.unload_all_models()
+    sd_models.model_management.soft_empty_cache()
+    gc.collect()
 
 
 def load_sam_model(sam_checkpoint):
@@ -202,6 +210,7 @@ def sam_predict_wrapper(request: gr.Request, id_task, sam_model_name, input_imag
         feature_type="buttons",
         feature_name="SegmentAnything",
     ):
+        unload_sd_models()
         try:
             return sam_predict(request, sam_model_name, input_image, *args, **kwargs)
         finally:
@@ -308,6 +317,7 @@ def dino_predict_wrapper(request: gr.Request, id_task: str, input_image, *args, 
         },
         is_intermediate=False,
     ):
+        unload_sd_models()
         try:
             return dino_predict(request, input_image, *args, **kwargs)
         finally:
@@ -429,6 +439,7 @@ def cnet_seg_wrapper(
             feature_type="buttons",
             feature_name="SegmentAnything",
         ):
+            unload_sd_models()
             try:
                 return cnet_seg(sam_model_name, cnet_seg_input_image, *args, **kwargs)
             finally:
@@ -517,6 +528,7 @@ def categorical_mask_wrapper(
             feature_type="buttons",
             feature_name="SegmentAnything",
         ):
+            unload_sd_models()
             try:
                 return categorical_mask(
                     sam_model_name,
