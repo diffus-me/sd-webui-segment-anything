@@ -150,8 +150,8 @@ async function submit_sam() {
     });
 
     res[0] = randomId();
-    res[3] = positive_points;
-    res[4] = negative_points;
+    res[4] = positive_points;
+    res[5] = negative_points;
     return res
 }
 
