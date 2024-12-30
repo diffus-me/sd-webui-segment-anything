@@ -8,7 +8,7 @@ import torch
 import gradio as gr
 from collections import OrderedDict
 from scipy.ndimage import binary_dilation
-from modules import scripts, shared, script_callbacks, sd_models
+from modules import scripts, shared, script_callbacks
 from modules.ui import gr_show
 from modules.ui_components import FormRow
 from modules.safe import unsafe_torch_load, load
@@ -21,6 +21,9 @@ from sam_hq.build_sam_hq import sam_model_registry
 from scripts.dino import dino_model_list, dino_predict_internal, show_boxes, clear_dino_cache, dino_install_issue_text
 from scripts.auto import clear_sem_sam_cache, register_auto_sam, semantic_segmentation, sem_sam_garbage_collect, image_layer_internal, categorical_mask_image
 from scripts.process_params import SAMProcessUnit, max_cn_num
+
+from modules_forge.utils import prepare_free_memory
+from modules.ui_components import ToolButton as WebUIToolButton
 
 
 refresh_symbol = '\U0001f504'       # 🔄
@@ -70,14 +73,6 @@ def update_mask(mask_gallery, chosen_mask, dilation_amt, input_image):
     matted_image = np.array(input_image)
     matted_image[~binary_img] = np.array([0, 0, 0, 0])
     return [blended_image, mask_image, Image.fromarray(matted_image)]
-
-
-def unload_sd_models() -> None:
-    sd_models.model_data.sd_model = None
-    sd_models.model_data.loaded_sd_models = []
-    sd_models.model_management.unload_all_models()
-    sd_models.model_management.soft_empty_cache()
-    gc.collect()
 
 
 def load_sam_model(sam_checkpoint):
@@ -210,7 +205,7 @@ def sam_predict_wrapper(request: gr.Request, id_task, _, sam_model_name, input_i
         feature_type="buttons",
         feature_name="SegmentAnything",
     ):
-        unload_sd_models()
+        prepare_free_memory(True)
         try:
             return sam_predict(request, sam_model_name, input_image, *args, **kwargs)
         finally:
@@ -317,7 +312,7 @@ def dino_predict_wrapper(request: gr.Request, id_task: str, _, input_image, *arg
         },
         is_intermediate=False,
     ):
-        unload_sd_models()
+        prepare_free_memory(True)
         try:
             return dino_predict(request, input_image, *args, **kwargs)
         finally:
@@ -440,7 +435,7 @@ def cnet_seg_wrapper(
             feature_type="buttons",
             feature_name="SegmentAnything",
         ):
-            unload_sd_models()
+            prepare_free_memory(True)
             try:
                 return cnet_seg(sam_model_name, cnet_seg_input_image, *args, **kwargs)
             finally:
@@ -530,7 +525,7 @@ def categorical_mask_wrapper(
             feature_type="buttons",
             feature_name="SegmentAnything",
         ):
-            unload_sd_models()
+            prepare_free_memory(True)
             try:
                 return categorical_mask(
                     sam_model_name,
@@ -758,13 +753,13 @@ class Script(scripts.Script):
         tab_prefix = ("img2img" if is_img2img else "txt2img") + "_sam_"
         ui_process = ()
         with gr.Accordion('Object Segmentation (Segment Anything)', open=False, elem_id="segment_anything"):
-            id_task = gr.Label(visible=False)
+            id_task = gr.Textbox(visible=False)
             task_flag = gr.Textbox("task_type(SAM)", visible=False)
             with gr.Row():
                 with gr.Column(scale=10):
                     with gr.Row():
                         sam_model_name = gr.Dropdown(label="SAM Model", choices=sam_model_list, value=sam_model_list[0] if len(sam_model_list) > 0 else None)
-                        sam_refresh_models = ToolButton(value=refresh_symbol)
+                        sam_refresh_models = WebUIToolButton(value=refresh_symbol)
                         sam_refresh_models.click(refresh_sam_models, sam_model_name, sam_model_name)
                 with gr.Column(scale=1):
                     sam_use_cpu = gr.Checkbox(value=False, label="Use CPU for SAM")
@@ -794,7 +789,7 @@ class Script(scripts.Script):
                         outputs=[sam_input_image],
                     )
                     sam_remove_dots = gr.Button(value="Remove all point prompts")
-                    sam_dummy_component = gr.Label(visible=False)
+                    sam_dummy_component = gr.JSON(visible=False)
                     sam_remove_dots.click(
                         fn=lambda _: None,
                         _js="samRemoveDots",
@@ -834,7 +829,7 @@ class Script(scripts.Script):
                         inputs=[dino_checkbox],
                         outputs=[dino_column],
                         show_progress=False)
-                    sam_output_mask_gallery = gr.Gallery(label='Segment Anything Output', columns=3)
+                    sam_output_mask_gallery = gr.Gallery(label='Segment Anything Output', columns=3, interactive=False)
                     sam_submit = gr.Button(value="Preview Segmentation", elem_id=f"{tab_prefix}run_button")
                     sam_result = gr.Text(value="", label="Segment Anything status")
                     sam_submit.click(
