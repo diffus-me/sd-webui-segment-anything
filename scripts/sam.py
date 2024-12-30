@@ -761,12 +761,12 @@ class Script(scripts.Script):
                         sam_model_name = gr.Dropdown(label="SAM Model", choices=sam_model_list, value=sam_model_list[0] if len(sam_model_list) > 0 else None)
                         sam_refresh_models = WebUIToolButton(value=refresh_symbol)
                         sam_refresh_models.click(refresh_sam_models, sam_model_name, sam_model_name)
-                with gr.Column(scale=1):
-                    sam_use_cpu = gr.Checkbox(value=False, label="Use CPU for SAM")
-                    def change_sam_device(use_cpu=False):
-                        global sam_device
-                        sam_device = "cpu" if use_cpu else device
-                    sam_use_cpu.change(fn=change_sam_device, inputs=[sam_use_cpu], show_progress=False)
+                # with gr.Column(scale=1):
+                #     sam_use_cpu = gr.Checkbox(value=False, label="Use CPU for SAM")
+                #     def change_sam_device(use_cpu=False):
+                #         global sam_device
+                #         sam_device = "cpu" if use_cpu else device
+                #     sam_use_cpu.change(fn=change_sam_device, inputs=[sam_use_cpu], show_progress=False)
             with gr.Tabs():
                 with gr.TabItem(label="Single Image"):
                     gr.HTML(value="<p>Left click the image to add one positive point (black dot). Right click the image to add one negative point (red dot). Left click the point to remove it.</p>")
