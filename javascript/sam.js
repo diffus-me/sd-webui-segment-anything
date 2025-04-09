@@ -226,8 +226,8 @@ function monitorImageResolution(tab_id) {
     return async (...values) => {
         const src = values[0];
         let resolution = [512, 512];
-        if (src) {
-            resolution = await getImageResolutionFromSrc(src);
+        if (src && src.url) {
+            resolution = await getImageResolutionFromSrc(src.url);
         }
 
         const observer = monitorThisParam(
