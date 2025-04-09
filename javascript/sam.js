@@ -128,7 +128,7 @@ function submit_dino() {
 async function submit_sam() {
     const tab_prefix = samTabPrefix();
     addGenerateGtagEvent(`#${tab_prefix}run_button > span`, `${tab_prefix}generation_button`);
-    await tierCheckButtonInternal("SegmentAnything");
+    tierCheckButton("SegmentAnything");
 
     let res = create_submit_sam_args(arguments);
     let positive_points = [];
@@ -205,7 +205,7 @@ onUiUpdate(() => {
 async function submit_cneg_seg() {
     const tab_prefix = samTabPrefix();
     addGenerateGtagEvent(`#${tab_prefix}cnet_seg_run_button > span`, `${tab_prefix}cnet_seg_generation_button`);
-    await tierCheckButtonInternal("SegmentAnything");
+    tierCheckButton("SegmentAnything");
 
     const res = Array.from(arguments);
     res[0] = randomId();
@@ -215,7 +215,7 @@ async function submit_cneg_seg() {
 async function submit_crop() {
     const tab_prefix = samTabPrefix();
     addGenerateGtagEvent(`#${tab_prefix}crop_run_button > span`, `${tab_prefix}crop_generation_button`);
-    await tierCheckButtonInternal("SegmentAnything");
+    tierCheckButton("SegmentAnything");
 
     const res = Array.from(arguments);
     res[0] = randomId();
