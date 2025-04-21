@@ -1,3 +1,4 @@
+from functools import wraps
 import gc
 import os
 import copy
@@ -15,7 +16,7 @@ from modules.safe import unsafe_torch_load, load
 from modules.processing import StableDiffusionProcessingImg2Img, StableDiffusionProcessing
 from modules.devices import device, torch_gc, cpu
 from modules.paths import models_path
-from modules.system_monitor import monitor_call_context
+from modules.system_monitor import monitor_call_context, MonitorException, MonitorTierMismatchedException
 from sam_hq.predictor import SamPredictorHQ
 from sam_hq.build_sam_hq import sam_model_registry
 from scripts.dino import dino_model_list, dino_predict_internal, show_boxes, clear_dino_cache, dino_install_issue_text
@@ -189,8 +190,85 @@ def create_mask_batch_output(
             output_blend.save(os.path.join(dino_batch_dest_dir, f"{filename}_{idx}_blend{ext}"))
 
 
+class SamError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+        self.message = message
 
+    def __str__(self):
+        return self.message
+
+
+def handle_error(defaults: tuple, message_index: int):
+    def decorator(fn):
+        @wraps(fn)
+        def wrapper(*args, **kwargs):
+            id_task = args[1]
+            try:
+                return fn(*args, **kwargs)
+
+            except MonitorException as error:
+                match (error.status_code, error.code):
+                    case (402, "WEBUIFE-01010001"):
+                        upgrade_info = {
+                            "need_upgrade": True,
+                            "reason": "INSUFFICIENT_CREDITS",
+                        }
+                    case (402, "WEBUIFE-01010003"):
+                        upgrade_info = {
+                            "need_upgrade": True,
+                            "reason": "INSUFFICIENT_DAILY_CREDITS",
+                        }
+                    case (429, "WEBUIFE-01010004"):
+                        upgrade_info = {
+                            "need_upgrade": True,
+                            "reason": "REACH_CONCURRENCY_LIMIT",
+                        }
+                    case _:
+                        upgrade_info = {"need_upgrade": False}
+
+                upgrade_info["id_task"] = id_task
+                result = list(defaults)
+                result[message_index] = None
+                result.append(upgrade_info)
+                return result
+
+            except MonitorTierMismatchedException as error:
+                message = f"This feature is available for {', '.join(error.allowed_tiers)} users, please upgrade to access it."
+                upgrade_info = {
+                    "need_upgrade": True,
+                    "id_task": id_task,
+                    "message": message,
+                }
+
+                result = list(defaults)
+                result[message_index] = gr.update(value=message, visible=True)
+                result.append(upgrade_info)
+                return result
+
+            except Exception as error:
+                upgrade_info = {
+                    "need_upgrade": False,
+                    "id_task": id_task,
+                    "message": str(error),
+                }
+
+                result = list(defaults)
+                result[message_index] = gr.update(value=str(error), visible=True)
+                result.append(upgrade_info)
+                return result
+
+        return wrapper
+
+    return decorator
+
+
+@handle_error(([], ""), 1)
 def sam_predict_wrapper(request: gr.Request, id_task, _, sam_model_name, input_image, *args, **kwargs):
+    if input_image is None:
+        raise SamError("SAM requires an input image. Please upload an image first.")
+
+    credits_output: dict[str, int | None] = {}
     with monitor_call_context(
         request,
         "extensions.segment_anything",
@@ -204,12 +282,22 @@ def sam_predict_wrapper(request: gr.Request, id_task, _, sam_model_name, input_i
         is_intermediate=False,
         feature_type="buttons",
         feature_name="SegmentAnything",
+        output_container=credits_output,
     ):
         prepare_free_memory(True)
         try:
-            return sam_predict(request, sam_model_name, input_image, *args, **kwargs)
+            results = sam_predict(request, sam_model_name, input_image, *args, **kwargs)
         finally:
             clear_cache()
+
+    return results + (
+        {
+            "need_upgrade": False,
+            "id_task": id_task,
+            "credits": credits_output["credits"],
+        },
+    )
+
 
 
 def sam_predict(*args, **kwargs):
@@ -227,9 +315,9 @@ def sam_predict_internal(request: gr.Request, sam_model_name, input_image, posit
                 dino_preview_checkbox, dino_preview_boxes_selection, boxes_filt=None, multimask_output=True):
     print("Start SAM Processing")
     if sam_model_name is None:
-        return [], "SAM model not found. Please download SAM model from extension README."
+        raise SamError("SAM model not found. Please download SAM model from extension README.")
     if input_image is None:
-        return [], "SAM requires an input image. Please upload an image first."
+        raise SamError("SAM requires an input image. Please upload an image first.")
     image_np = np.array(input_image)
     image_np_rgb = image_np[..., :3]
     dino_enabled = dino_checkbox and text_prompt is not None
@@ -241,7 +329,7 @@ def sam_predict_internal(request: gr.Request, sam_model_name, input_image, posit
     elif dino_enabled:
         boxes_filt, install_success = dino_predict_internal_wrapper(request, input_image, dino_model_name, text_prompt, box_threshold)
         if boxes_filt.shape[0] == 0:
-            return [], "GroundingDINO failed to find boxed fit the input text prompt."
+            raise SamError("GroundingDINO failed to find boxed fit the input text prompt.")
 
         if dino_preview_checkbox and dino_preview_boxes_selection is not None:
             valid_indices = [int(i) for i in dino_preview_boxes_selection if int(i) < boxes_filt.shape[0]]
@@ -262,8 +350,6 @@ def sam_predict_internal(request: gr.Request, sam_model_name, input_image, posit
             "height": input_image.height,
             "n_iter": 1,
         },
-        feature_type="buttons",
-        feature_name="SegmentAnything",
     ):
         if boxes_filt is not None and boxes_filt.shape[0] > 1:
             sam_predict_status = f"SAM inference with {boxes_filt.shape[0]} boxes, point prompts discarded"
@@ -281,8 +367,8 @@ def sam_predict_internal(request: gr.Request, sam_model_name, input_image, posit
             if num_box == 0 and num_points == 0:
                 garbage_collect(sam)
                 if dino_enabled and dino_preview_checkbox and num_box == 0:
-                    return [], "It seems that you are using a high box threshold with no point prompts. Please lower your box threshold and re-try."
-                return [], "You neither added point prompts nor enabled GroundingDINO. Segmentation cannot be generated."
+                    raise SamError("It seems that you are using a high box threshold with no point prompts. Please lower your box threshold and re-try.")
+                raise SamError("You neither added point prompts nor enabled GroundingDINO. Segmentation cannot be generated.")
             sam_predict_status = f"SAM inference with {num_box} box, {len(positive_points)} positive prompts, {len(negative_points)} negative prompts"
             print(sam_predict_status)
             point_coords = np.array(positive_points + negative_points)
@@ -299,7 +385,12 @@ def sam_predict_internal(request: gr.Request, sam_model_name, input_image, posit
     return [image_np, masks, qualities, boxes_filt], sam_predict_status + sam_predict_result + (f" However, GroundingDINO installment has failed. Your process automatically fall back to local groundingdino. Check your terminal for more detail and {dino_install_issue_text}." if (dino_enabled and not install_success) else "")
 
 
+@handle_error((None, None, ""), 2)
 def dino_predict_wrapper(request: gr.Request, id_task: str, _, input_image, *args, **kwargs):
+    if input_image is None:
+        raise SamError("GroundingDINO requires input image.")
+
+    credits_output: dict[str, int | None] = {}
     with monitor_call_context(
         request,
         "extensions.segment_anything",
@@ -311,19 +402,30 @@ def dino_predict_wrapper(request: gr.Request, id_task: str, _, input_image, *arg
             "n_iter": 1,
         },
         is_intermediate=False,
+        feature_type="buttons",
+        feature_name="SegmentAnything",
+        output_container=credits_output,
     ):
         prepare_free_memory(True)
         try:
-            return dino_predict(request, input_image, *args, **kwargs)
+            results = dino_predict(request, input_image, *args, **kwargs)
         finally:
             clear_cache()
+
+    return results + (
+        {
+            "need_upgrade": False,
+            "id_task": id_task,
+            "credits": credits_output["credits"],
+        },
+    )
 
 
 def dino_predict(request: gr.Request, input_image, dino_model_name, text_prompt, box_threshold):
     if input_image is None:
-        return None, gr.update(), gr.update(visible=True, value=f"GroundingDINO requires input image.")
+        raise SamError("GroundingDINO requires input image.")
     if text_prompt is None or text_prompt == "":
-        return None, gr.update(), gr.update(visible=True, value=f"GroundingDINO requires text prompt.")
+        raise SamError("GroundingDINO requires text prompt.")
     image_np = np.array(input_image)
 
     boxes_filt, install_success = dino_predict_internal_wrapper(request, input_image, dino_model_name, text_prompt, box_threshold)
@@ -400,6 +502,7 @@ def dino_batch_process(
     return process_info + "Done" + ("" if install_success else f". However, GroundingDINO installment has failed. Your process automatically fall back to local groundingdino. See your terminal for more detail and {dino_install_issue_text}")
 
 
+@handle_error(([], ""), 1)
 def cnet_seg_wrapper(
         request: gr.Request,
         id_task,
@@ -409,6 +512,10 @@ def cnet_seg_wrapper(
         *args,
         **kwargs
 ):
+    if cnet_seg_input_image is None:
+        raise SamError("No input image.")
+
+    credits_output: dict[str, int | None] = {}
     with monitor_call_context(
         request,
         "extensions.segment_anything",
@@ -422,6 +529,7 @@ def cnet_seg_wrapper(
         is_intermediate=False,
         feature_type="buttons",
         feature_name="SegmentAnything",
+        output_container=credits_output,
     ):
         with monitor_call_context(
             request,
@@ -432,14 +540,20 @@ def cnet_seg_wrapper(
                 "height": cnet_seg_input_image.height,
                 "n_iter": 1,
             },
-            feature_type="buttons",
-            feature_name="SegmentAnything",
         ):
             prepare_free_memory(True)
             try:
-                return cnet_seg(sam_model_name, cnet_seg_input_image, *args, **kwargs)
+                results = cnet_seg(sam_model_name, cnet_seg_input_image, *args, **kwargs)
             finally:
                 clear_cache()
+
+    return results + (
+        {
+            "need_upgrade": False,
+            "id_task": id_task,
+            "credits": credits_output["credits"],
+        },
+    )
 
 
 def cnet_seg(
@@ -483,6 +597,7 @@ def image_layout(
     return outputs
 
 
+@handle_error(([], "", None), 1)
 def categorical_mask_wrapper(
     request: gr.Request,
     id_task: str,
@@ -499,6 +614,10 @@ def categorical_mask_wrapper(
     *args,
     **kwargs
 ):
+    if crop_input_image is None:
+        raise SamError("No input image.")
+
+    credits_output: dict[str, int | None] = {}
     with monitor_call_context(
         request,
         "extensions.segment_anything",
@@ -512,6 +631,7 @@ def categorical_mask_wrapper(
         is_intermediate=False,
         feature_type="buttons",
         feature_name="SegmentAnything",
+        output_container=credits_output,
     ):
         with monitor_call_context(
             request,
@@ -522,12 +642,10 @@ def categorical_mask_wrapper(
                 "height": crop_input_image.height,
                 "n_iter": 1,
             },
-            feature_type="buttons",
-            feature_name="SegmentAnything",
         ):
             prepare_free_memory(True)
             try:
-                return categorical_mask(
+                results = categorical_mask(
                     sam_model_name,
                     crop_processor,
                     crop_processor_res,
@@ -542,6 +660,15 @@ def categorical_mask_wrapper(
                 )
             finally:
                 clear_cache()
+
+    return results + (
+        {
+            "need_upgrade": False,
+            "id_task": id_task,
+            "credits": credits_output["credits"],
+        },
+    )
+
 
 
 def categorical_mask(
@@ -566,7 +693,7 @@ def categorical_mask(
     sem_sam_garbage_collect()
     garbage_collect(sam)
     if isinstance(outputs, str):
-        return [], outputs, None
+        raise SamError(outputs)
     output_gallery = create_mask_output(resized_input_image_np, outputs[None, None, ...], None)
     return output_gallery, "Done", resized_input_image_pil
 
@@ -748,6 +875,9 @@ class Script(scripts.Script):
         return scripts.AlwaysVisible
 
     def ui(self, is_img2img):
+        upgrade_info = gr.JSON(value={}, visible=False)
+        upgrade_info.change(None, [upgrade_info], None, _js="upgradeCheck")
+
         if max_cn_num() > 0:
             priorize_sam_scripts(is_img2img)
         tab_prefix = ("img2img" if is_img2img else "txt2img") + "_sam_"
@@ -800,7 +930,7 @@ class Script(scripts.Script):
                                 fn=dino_predict_wrapper,
                                 _js="submit_dino",
                                 inputs=[id_task, task_flag, sam_input_image, dino_model_name, dino_text_prompt, dino_box_threshold],
-                                outputs=[dino_preview_boxes, dino_preview_boxes_selection, dino_preview_result])
+                                outputs=[dino_preview_boxes, dino_preview_boxes_selection, dino_preview_result, upgrade_info])
                         dino_preview_checkbox.change(
                             fn=gr_show,
                             inputs=[dino_preview_checkbox],
@@ -821,7 +951,7 @@ class Script(scripts.Script):
                                 sam_dummy_component, sam_dummy_component,   # Point prompts
                                 dino_checkbox, dino_model_name, dino_text_prompt, dino_box_threshold,  # DINO prompts
                                 dino_preview_checkbox, dino_preview_boxes_selection],  # DINO preview prompts
-                        outputs=[sam_output_mask_gallery, sam_result])
+                        outputs=[sam_output_mask_gallery, sam_result, upgrade_info])
                     with FormRow():
                         sam_output_chosen_mask = gr.Radio(label="Choose your favorite mask: ", value="0", choices=["0", "1", "2"], type="index")
                         # gr.Checkbox(value=False, label="Preview automatically when add/remove points", elem_id=f"{tab_prefix}realtime_preview_checkbox")
@@ -891,7 +1021,7 @@ class Script(scripts.Script):
                                 fn=cnet_seg_wrapper,
                                 _js="submit_cneg_seg",
                                 inputs=[id_task, task_flag, sam_model_name, cnet_seg_input_image, cnet_seg_processor, cnet_seg_processor_res, cnet_seg_pixel_perfect, cnet_seg_resize_mode, img2img_width if is_img2img else txt2img_width, img2img_height if is_img2img else txt2img_height, *auto_sam_config],
-                                outputs=[cnet_seg_output_gallery, cnet_seg_status])
+                                outputs=[cnet_seg_output_gallery, cnet_seg_status, upgrade_info])
                             with gr.Row(visible=(max_cn_num() > 0)):
                                 cnet_seg_enable_copy = gr.Checkbox(value=False, label='Copy to ControlNet Segmentation')
                                 cnet_seg_idx = gr.Radio(value="0" if max_cn_num() > 0 else None, choices=[str(i) for i in range(max_cn_num())], label='ControlNet Segmentation Index', type="index")
@@ -949,7 +1079,7 @@ class Script(scripts.Script):
                                         inputs=[id_task, task_flag, sam_model_name, crop_processor, crop_processor_res, crop_pixel_perfect, crop_resize_mode, 
                                                 img2img_width if is_img2img else txt2img_width, img2img_height if is_img2img else txt2img_height, 
                                                 crop_category_input, crop_input_image, *auto_sam_config],
-                                        outputs=[crop_output_gallery, crop_result, crop_resized_image])
+                                        outputs=[crop_output_gallery, crop_result, crop_resized_image, upgrade_info])
                                     crop_inpaint_enable, crop_cnet_inpaint_invert, crop_cnet_inpaint_idx = ui_inpaint(is_img2img, max_cn_num())
                                     crop_dilation_checkbox, crop_dilation_output_gallery = ui_dilation(crop_output_gallery, crop_padding, crop_resized_image)
                                     crop_single_image_process = (

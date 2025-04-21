@@ -111,23 +111,21 @@ function create_submit_sam_args(args) {
 
 
 function submit_dino() {
-    const tab_prefix = samTabPrefix();
-    addGenerateGtagEvent(`#${tab_prefix}dino_run_button > span`, `${tab_prefix}dino_generation_button`);
-
     res = []
     for (var i = 0; i < arguments.length; i++) {
         res.push(arguments[i])
     }
 
-    res[0] = randomId();
+    const id = randomId();
+    idToItemNames[id] = `${samTabPrefix()}dino_generation_button`;
+
+    res[0] = id;
     res[res.length - 2] = null
     res[res.length - 1] = null
     return res
 }
 
 async function submit_sam() {
-    const tab_prefix = samTabPrefix();
-    addGenerateGtagEvent(`#${tab_prefix}run_button > span`, `${tab_prefix}generation_button`);
     tierCheckButton("SegmentAnything");
 
     let res = create_submit_sam_args(arguments);
@@ -149,7 +147,10 @@ async function submit_sam() {
         });
     });
 
-    res[0] = randomId();
+    const id = randomId();
+    idToItemNames[id] = `${samTabPrefix()}generation_button`;
+
+    res[0] = id;
     res[4] = positive_points;
     res[5] = negative_points;
     return res
@@ -203,21 +204,25 @@ onUiUpdate(() => {
 })
 
 async function submit_cneg_seg() {
-    const tab_prefix = samTabPrefix();
-    addGenerateGtagEvent(`#${tab_prefix}cnet_seg_run_button > span`, `${tab_prefix}cnet_seg_generation_button`);
     tierCheckButton("SegmentAnything");
 
     const res = Array.from(arguments);
-    res[0] = randomId();
+
+    const id = randomId();
+    idToItemNames[id] = `${samTabPrefix()}cnet_seg_generation_button`;
+
+    res[0] = id;
     return res;
 }
 
 async function submit_crop() {
-    const tab_prefix = samTabPrefix();
-    addGenerateGtagEvent(`#${tab_prefix}crop_run_button > span`, `${tab_prefix}crop_generation_button`);
     tierCheckButton("SegmentAnything");
 
     const res = Array.from(arguments);
-    res[0] = randomId();
+
+    const id = randomId();
+    idToItemNames[id] = `${samTabPrefix()}crop_generation_button`;
+
+    res[0] = id;
     return res;
 }

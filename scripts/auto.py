@@ -214,11 +214,13 @@ def _oneformer(img, dataset="coco"):
 
 def semantic_segmentation(input_image, annotator_name, processor_res, 
                           use_pixel_perfect, resize_mode, target_W, target_H):
+    from scripts.sam import SamError
+
     if input_image is None:
-        return [], "No input image."
+        raise SamError("Input image is None")
     if "seg" in annotator_name:
         if not os.path.isdir(os.path.join(scripts.basedir(), "annotator")) and not create_symbolic_link():
-            return [], "ControlNet extension not found."
+            raise SamError("ControlNet extension not found.")
         global original_uniformer_inference_segmentor
         input_image_np = np.array(input_image)
         processor_res = pixel_perfect_lllyasviel(input_image_np, processor_res, use_pixel_perfect, resize_mode, target_W, target_H)
@@ -257,17 +259,19 @@ def semantic_segmentation(input_image, annotator_name, processor_res,
 
 def categorical_mask_image(crop_processor, crop_processor_res, crop_category_input, crop_input_image,
                            crop_pixel_perfect, crop_resize_mode, target_W, target_H):
+    from scripts.sam import SamError
+
     if crop_input_image is None:
-        return "No input image."
+        raise SamError("No input image.")
     if not os.path.isdir(os.path.join(scripts.basedir(), "annotator")) and not create_symbolic_link():
-        return "ControlNet extension not found."
+        raise SamError("ControlNet extension not found.")
     filter_classes = crop_category_input.split('+')
     if len(filter_classes) == 0:
-        return "No class selected."
+        raise SamError("No class selected.")
     try:
         filter_classes = [int(i) for i in filter_classes]
     except:
-        return "Illegal class id. You may have input some string."
+        raise SamError("Illegal class id. You may have input some string.")
     crop_input_image_np = np.array(crop_input_image)
     crop_processor_res = pixel_perfect_lllyasviel(crop_input_image_np, crop_processor_res, crop_pixel_perfect, crop_resize_mode, target_W, target_H)
     crop_input_image, remove_pad = resize_image_with_pad(crop_input_image_np, crop_processor_res)
