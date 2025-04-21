@@ -772,18 +772,6 @@ class Script(scripts.Script):
                     gr.HTML(value="<p>Left click the image to add one positive point (black dot). Right click the image to add one negative point (red dot). Left click the point to remove it.</p>")
                     sam_input_image = gr.Image(label="Image for Segment Anything", elem_id=f"{tab_prefix}input_image", source="upload", type="pil", image_mode="RGBA")
                     sam_input_image.change(
-                        None,
-                        inputs=[],
-                        outputs=[sam_input_image],
-                        _js=f"monitorImageResolution('{tab_prefix}run_interface')",
-                    )
-                    sam_input_image.change(
-                        None,
-                        inputs=[],
-                        outputs=[sam_input_image],
-                        _js=f"monitorImageResolution('{tab_prefix}dino_run_interface')",
-                    )
-                    sam_input_image.change(
                         update_image_display_size,
                         inputs=[],
                         outputs=[sam_input_image],
@@ -797,12 +785,6 @@ class Script(scripts.Script):
                         outputs=None)
                     gr.HTML(value="<p>GroundingDINO + Segment Anything can achieve [text prompt]->[object detection]->[segmentation]</p>")
                     dino_checkbox = gr.Checkbox(value=False, label="Enable GroundingDINO", elem_id=f"{tab_prefix}dino_enable_checkbox")
-                    dino_checkbox.change(
-                        None,
-                        inputs=[],
-                        outputs=[dino_checkbox],
-                        _js=f"monitorThisParam('{tab_prefix}run_interface', 'extensions.segment_anything', 'n_iter', extractor = (x) => x? 2 : 1)",
-                    )
                     with gr.Column(visible=False) as dino_column:
                         gr.HTML(value="<p>Due to the limitation of Segment Anything, when there are point prompts, at most 1 box prompt will be allowed; when there are multiple box prompts, no point prompts are allowed.</p>")
                         dino_model_name = gr.Dropdown(label="GroundingDINO Model (Auto download from huggingface)", choices=dino_model_list, value=dino_model_list[0])
@@ -897,12 +879,6 @@ class Script(scripts.Script):
                             cnet_seg_processor, cnet_seg_processor_res, cnet_seg_gallery_input, cnet_seg_pixel_perfect, cnet_seg_resize_mode = ui_processor(use_cnet=(max_cn_num() > 0))
                             cnet_seg_input_image = gr.Image(label="Image for Auto Segmentation", source="upload", type="pil", image_mode="RGBA")
                             cnet_seg_input_image.change(
-                                None,
-                                inputs=[],
-                                outputs=[cnet_seg_input_image],
-                                _js=f"monitorImageResolution('{tab_prefix}cnet_seg_run_interface')",
-                            )
-                            cnet_seg_input_image.change(
                                 update_image_display_size,
                                 inputs=[],
                                 outputs=[cnet_seg_input_image],
@@ -957,12 +933,6 @@ class Script(scripts.Script):
                             with gr.Tabs():
                                 with gr.TabItem(label="Single Image"):
                                     crop_input_image = gr.Image(label="Image to be masked", source="upload", type="pil", image_mode="RGBA")
-                                    crop_input_image.change(
-                                        None,
-                                        inputs=[],
-                                        outputs=[crop_input_image],
-                                        _js=f"monitorImageResolution('{tab_prefix}crop_run_interface')",
-                                    )
                                     crop_input_image.change(
                                         update_image_display_size,
                                         inputs=[],
