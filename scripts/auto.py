@@ -9,7 +9,7 @@ import torch
 import cv2
 from sam_hq.automatic import SamAutomaticMaskGeneratorHQ
 from modules import scripts, shared
-from modules.paths import extensions_dir
+from modules.paths import extensions_builtin_dir
 from modules.devices import torch_gc
 
 
@@ -52,7 +52,7 @@ def blend_image_and_seg(image, seg, alpha=0.5):
 
 
 def create_symbolic_link():
-    cnet_annotator_dir = os.path.join(extensions_dir, "sd-webui-controlnet/annotator")
+    cnet_annotator_dir = os.path.join(extensions_builtin_dir, "forge_legacy_preprocessors/annotator")
     if os.path.isdir(cnet_annotator_dir):
         if not os.path.isdir(sam_annotator_dir):
             os.symlink(cnet_annotator_dir, sam_annotator_dir, target_is_directory=True)
